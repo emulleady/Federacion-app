@@ -1,0 +1,27 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Solicitudes pendientes ({{ solicitudes|length }})</h2>
+
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Tipo</th>
+    <th>Club origen</th>
+    <th>Club destino</th>
+    <th>Estado</th>
+    <th></th>
+  </tr>
+  {% for s in solicitudes %}
+  <tr>
+    <td>{{ s.persona }}</td>
+    <td>{{ s.get_tipo_display }}</td>
+    <td>{{ s.club_origen|default:"—" }}</td>
+    <td>{{ s.club_destino }}</td>
+    <td><span class="badge badge-{{ s.estado|slice:':10' }}">{{ s.get_estado_display }}</span></td>
+    <td><a href="{% url 'revisar_solicitud' s.id %}">Revisar</a></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">No hay solicitudes pendientes.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

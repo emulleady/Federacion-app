@@ -1,0 +1,31 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Revisar solicitud</h2>
+  <p><strong>Jugador:</strong> {{ solicitud.persona }}</p>
+  <p><strong>Tipo:</strong> {{ solicitud.get_tipo_display }}</p>
+  <p><strong>Club origen:</strong> {{ solicitud.club_origen|default:"—" }}</p>
+  <p><strong>Club destino:</strong> {{ solicitud.club_destino }}</p>
+  <p><strong>Categoría destino:</strong> {{ solicitud.categoria_destino|default:"—" }}</p>
+
+  {% if solicitud.nota_liberacion %}
+  <p><strong>Nota del club de origen:</strong> {{ solicitud.nota_liberacion }}</p>
+  {% endif %}
+
+  <h3>Documentación adjunta</h3>
+  <ul>
+    {% for doc in solicitud.documentos.all %}
+      <li><a href="{{ doc.archivo.url }}">{{ doc.descripcion|default:doc.archivo.name }}</a></li>
+    {% empty %}
+      <li>Sin documentación adjunta.</li>
+    {% endfor %}
+  </ul>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Confirmar</button>
+  </form>
+</div>
+<p><a href="{% url 'panel_solicitudes' %}">← Volver al panel</a></p>
+{% endblock %}

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Federación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --azul: #2563eb;
+      --azul-oscuro: #1e40af;
+      --verde: #16a34a;
+      --rojo: #dc2626;
+      --gris-fondo: #f8f9fb;
+      --gris-borde: #e5e7eb;
+      --gris-texto: #6b7280;
+      --texto-oscuro: #111827;
+      --sombra: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--gris-fondo);
+      color: var(--texto-oscuro);
+      margin: 0;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    nav {
+      background: white;
+      border-bottom: 1px solid var(--gris-borde);
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    nav .usuario {
+      font-size: 14px;
+      color: var(--gris-texto);
+    }
+    nav .usuario strong { color: var(--texto-oscuro); }
+
+    nav .links a, nav .links button {
+      color: var(--azul);
+      text-decoration: none;
+      font-size: 14px;
+      margin-left: 16px;
+      font-weight: 500;
+    }
+    nav .links a:hover, nav .links button:hover { text-decoration: underline; }
+
+    .logout-btn {
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      font: inherit;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 32px auto;
+      padding: 0 20px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--gris-borde);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      box-shadow: var(--sombra);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--texto-oscuro);
+    }
+    h3 { font-size: 15px; font-weight: 600; color: var(--gris-texto); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--gris-borde);
+      box-shadow: var(--sombra);
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--gris-borde);
+      font-size: 14px;
+    }
+    th {
+      background: var(--gris-fondo);
+      color: var(--gris-texto);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafbfc; }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      vertical-align: middle;
+      margin-right: 10px;
+      border: 1px solid var(--gris-borde);
+    }
+    .avatar-placeholder {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #e0e7ff;
+      color: var(--azul-oscuro);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      vertical-align: middle;
+      margin-right: 10px;
+    }
+    .avatar-grande {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--gris-borde);
+    }
+    .avatar-grande-placeholder {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: #e0e7ff;
+      color: var(--azul-oscuro);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .encabezado-persona {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    form p { margin: 14px 0; }
+    label { font-size: 13px; color: var(--gris-texto); display: block; margin-bottom: 4px; font-weight: 500; }
+
+    input[type=text], input[type=date], input[type=file],
+    select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--gris-borde);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      background: white;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--azul);
+    }
+
+    button, input[type=submit] {
+      background: var(--azul);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 8px;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: var(--azul-oscuro); }
+
+    button[value="rechazar"] { background: var(--rojo); }
+    button[value="rechazar"]:hover { background: #7f1d1d; }
+    button[value="liberar"], button[value="aprobar"] { background: var(--verde); }
+
+    a { color: var(--azul); }
+
+    .mensaje {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: var(--verde);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-pendiente { background: #fef3c7; color: #92400e; }
+    .badge-liberacion { background: #fef3c7; color: #92400e; }
+    .badge-revision { background: #dbeafe; color: #1e40af; }
+    .badge-aprobado { background: #dcfce7; color: #166534; }
+    .badge-rechazado { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <nav>
+    {% if user.is_authenticated %}
+      <div class="usuario">
+        Hola, <strong>{{ user.username }}</strong>
+        ({{ user.get_rol_display }}{% if user.club %} — {{ user.club }}{% endif %})
+      </div>
+      <div class="links">
+        {% if user.rol == "delegado" %}
+          <a href="{% url 'nueva_solicitud' %}">Nueva solicitud</a>
+          <a href="{% url 'mis_solicitudes' %}">Mis solicitudes</a>
+          <a href="{% url 'solicitudes_a_liberar' %}">Me piden jugadores</a>
+        {% endif %}
+        {% if user.rol == "federacion" %}
+          <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
+        {% endif %}
+        <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
+        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit" class="logout-btn">Cerrar sesión</button>
+        </form>
+      </div>
+    {% endif %}
+  </nav>
+
+  <main>
+    {% if messages %}
+      {% for message in messages %}
+        <div class="mensaje">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}
+    {% endblock %}
+  </main>
+</body>
+</html>

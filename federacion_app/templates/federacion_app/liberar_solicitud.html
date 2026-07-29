@@ -1,0 +1,23 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>{{ solicitud.club_destino }} pide a {{ solicitud.persona }}</h2>
+  <p><strong>Tipo de solicitud:</strong> {{ solicitud.get_tipo_display }}</p>
+  <p><strong>Categoría destino:</strong> {{ solicitud.categoria_destino|default:"—" }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <p>
+      <label>Nota para la federación y el club destino (opcional — ej: valor del pase, condiciones)</label>
+      <textarea name="nota_liberacion" rows="3"></textarea>
+    </p>
+    <button type="submit" name="accion" value="liberar">Liberar jugador</button>
+    <button type="submit" name="accion" value="rechazar">Rechazar</button>
+    <p>
+      <label>Motivo (solo si rechazás)</label>
+      <textarea name="motivo_rechazo" rows="2"></textarea>
+    </p>
+  </form>
+</div>
+<p><a href="{% url 'solicitudes_a_liberar' %}">← Volver</a></p>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Nueva solicitud — {{ request.user.club }}</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Enviar solicitud</button>
+  </form>
+</div>
+<p><a href="{% url 'mis_solicitudes' %}">← Ver mis solicitudes</a></p>
+{% endblock %}

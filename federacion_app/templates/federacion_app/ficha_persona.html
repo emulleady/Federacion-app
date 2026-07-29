@@ -1,0 +1,34 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <div class="encabezado-persona">
+    {% if persona.foto %}
+      <img src="{{ persona.foto.url }}" class="avatar-grande" alt="{{ persona }}">
+    {% else %}
+      <div class="avatar-grande-placeholder">{{ persona.nombre|first }}{{ persona.apellido|first }}</div>
+    {% endif %}
+    <div>
+      <h2 style="margin-bottom:4px;">{{ persona.apellido }}, {{ persona.nombre }}</h2>
+      <p style="color:#6b7280; margin:0;">Documento: {{ persona.documento }} · Club actual: {{ persona.club_actual|default:"sin club" }}</p>
+    </div>
+  </div>
+</div>
+
+<h3>Historial de clubes</h3>
+<table>
+  <tr>
+    <th>Club</th>
+    <th>Categoría</th>
+    <th>Desde</th>
+    <th>Hasta</th>
+  </tr>
+  {% for v in historial %}
+  <tr>
+    <td>{{ v.club }}</td>
+    <td>{{ v.categoria|default:"—" }}</td>
+    <td>{{ v.fecha_inicio|date:"d/m/Y" }}</td>
+    <td>{{ v.fecha_fin|date:"d/m/Y"|default:"activo" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

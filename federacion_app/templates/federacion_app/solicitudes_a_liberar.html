@@ -1,0 +1,23 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Te piden jugadores ({{ solicitudes|length }})</h2>
+
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Club que lo pide</th>
+    <th>Tipo</th>
+    <th></th>
+  </tr>
+  {% for s in solicitudes %}
+  <tr>
+    <td>{{ s.persona }}</td>
+    <td>{{ s.club_destino }}</td>
+    <td>{{ s.get_tipo_display }}</td>
+    <td><a href="{% url 'liberar_solicitud' s.id %}">Revisar</a></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">Nadie te pidió jugadores por ahora.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

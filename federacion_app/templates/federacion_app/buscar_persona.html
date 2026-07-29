@@ -1,0 +1,31 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Buscar jugador</h2>
+  <form method="get" style="display:flex; gap:10px; align-items:flex-end;">
+    <div style="flex:1;">
+      <input type="text" name="q" value="{{ query }}" placeholder="Documento o apellido">
+    </div>
+    <button type="submit">Buscar</button>
+  </form>
+</div>
+
+<table>
+  {% for p in resultados %}
+  <tr>
+    <td>
+      <a href="{% url 'ficha_persona' p.id %}" style="display:flex; align-items:center; text-decoration:none; color:inherit;">
+        {% if p.foto %}
+          <img src="{{ p.foto.url }}" class="avatar" alt="">
+        {% else %}
+          <div class="avatar-placeholder">{{ p.nombre|first }}{{ p.apellido|first }}</div>
+        {% endif %}
+        <span>{{ p.apellido }}, {{ p.nombre }} <span style="color:#6b7280;">({{ p.documento }})</span></span>
+      </a>
+    </td>
+  </tr>
+  {% empty %}
+    {% if query %}<tr><td>Sin resultados.</td></tr>{% endif %}
+  {% endfor %}
+</table>
+{% endblock %}
