@@ -133,6 +133,11 @@ STORAGES = {
 # el que realmente manda es STORAGES de arriba.
 STATICFILES_STORAGE = STORAGES["staticfiles"]["BACKEND"]
 
+# Evita que collectstatic falle si algún archivo interno de Django/terceros
+# (como un ícono del admin) está referenciado en un CSS pero no se encuentra.
+# Solo lo ignora con un aviso, no rompe el deploy.
+WHITENOISE_MANIFEST_STRICT = False
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
