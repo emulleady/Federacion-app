@@ -20,6 +20,8 @@ class SolicitudPaseForm(forms.ModelForm):
         widget=forms.DateInput(attrs={"type": "date"}),
     )
     foto = forms.ImageField(label="Foto del jugador", required=False)
+    numero_carnet = forms.CharField(label="Número de carnet (si ya lo tiene)", max_length=30, required=False)
+    requiere_carnet = forms.BooleanField(label="¿Necesita tramitar el carnet?", required=False)
     archivo_documentacion = forms.FileField(label="Documentación (DNI, certificado médico)", required=False)
 
     class Meta:
@@ -65,4 +67,36 @@ class ResolucionSolicitudForm(forms.Form):
     accion = forms.ChoiceField(choices=ACCION_CHOICES, widget=forms.RadioSelect)
     motivo_rechazo = forms.CharField(
         label="Motivo (solo si rechazás)", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+
+
+class InscripcionTorneoForm(forms.Form):
+    """El delegado elige el torneo y el documento del jugador (de su propio club)."""
+    torneo = forms.ModelChoiceField(queryset=None, label="Torneo")
+    documento = forms.CharField(label="Documento del jugador", max_length=20)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import Torneo
+        self.fields["torneo"].queryset = Torneo.objects.filter(activo=True)
+
+
+class CobroInscripcionForm(forms.Form):
+    """La federación completa los tres conceptos al procesar la inscripción."""
+    derechos_federativos = forms.DecimalField(label="Derechos federativos ($)", max_digits=10, decimal_places=2, required=False)
+    fondo_seleccion = forms.DecimalField(label="Fondo de selección ($)", max_digits=10, decimal_places=2, required=False)
+    carnet = forms.DecimalField(label="Carnet ($)", max_digits=10, decimal_places=2, required=False)
+
+
+class ImportarExcelForm(forms.Form):
+    """Formulario para que la federación suba el Excel histórico desde la web."""
+    archivo = forms.FileField(
+        label="Archivo Excel (.xlsx)",
+        help_text="Una hoja por club. Columnas esperadas: documento, nombre, apellido, "
+                  "fecha_nacimiento, categoria (opcional), fecha_ingreso (opcional), "
+                  "numero_carnet (opcional), requiere_carnet (opcional: si/no).",
+    )
+    solo_simular = forms.BooleanField(
+        label="Solo simular (no guarda nada, solo muestra el resultado)",
+        required=False, initial=True,
     )

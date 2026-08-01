@@ -4,7 +4,7 @@
   <h2>Buscar jugador</h2>
   <form method="get" style="display:flex; gap:10px; align-items:flex-end;">
     <div style="flex:1;">
-      <input type="text" name="q" value="{{ query }}" placeholder="Documento o apellido">
+      <input type="text" name="q" value="{{ query }}" placeholder="Documento, apellido o N° de carnet">
     </div>
     <button type="submit">Buscar</button>
   </form>
@@ -20,7 +20,7 @@
         {% else %}
           <div class="avatar-placeholder">{{ p.nombre|first }}{{ p.apellido|first }}</div>
         {% endif %}
-        <span>{{ p.apellido }}, {{ p.nombre }} <span style="color:#6b7280;">({{ p.documento }})</span></span>
+        <span>{{ p.apellido }}, {{ p.nombre }} <span style="color:#6b7280;">({{ p.documento }}{% if p.numero_carnet %} · Carnet {{ p.numero_carnet }}{% endif %})</span></span>
       </a>
     </td>
   </tr>

@@ -1,0 +1,13 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>{{ inscripcion.persona }} — {{ inscripcion.torneo }}</h2>
+  <p style="color:#6b7280;">Club: {{ inscripcion.club }}</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Guardar cobro</button>
+  </form>
+</div>
+<p><a href="{% url 'cobro_masivo' %}">← Volver</a></p>
+{% endblock %}

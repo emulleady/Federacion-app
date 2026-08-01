@@ -1,0 +1,47 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Importar jugadores desde Excel</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Procesar archivo</button>
+  </form>
+</div>
+
+{% if resultado %}
+<div class="card">
+  <h3 style="margin-top:0;">
+    {% if resultado.simulado %}
+      Resultado de la simulación (no se guardó nada)
+    {% else %}
+      Importación completada
+    {% endif %}
+  </h3>
+  <p>✅ Jugadores nuevos: <strong>{{ resultado.creados }}</strong></p>
+  <p>🔁 Ya existentes / repetidos entre hojas: <strong>{{ resultado.actualizados }}</strong></p>
+
+  {% if resultado.duplicados %}
+  <details style="margin-top:10px;">
+    <summary style="cursor:pointer; color:#6b7280;">Ver duplicados detectados ({{ resultado.duplicados|length }})</summary>
+    <ul>
+      {% for d in resultado.duplicados %}<li style="font-size:13px; color:#6b7280;">{{ d }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  {% if resultado.errores %}
+  <details style="margin-top:10px;" open>
+    <summary style="cursor:pointer; color:#b91c1c;">Ver errores ({{ resultado.errores|length }})</summary>
+    <ul>
+      {% for e in resultado.errores %}<li style="font-size:13px; color:#b91c1c;">{{ e }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  {% if resultado.simulado %}
+  <p style="margin-top:16px;">Si el resultado se ve bien, volvé a subir el mismo archivo y destildá "Solo simular" para guardarlo de verdad.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

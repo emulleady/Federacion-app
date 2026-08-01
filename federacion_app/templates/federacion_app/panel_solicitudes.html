@@ -1,6 +1,7 @@
 {% extends "federacion_app/base.html" %}
 {% block content %}
 <h2>Solicitudes pendientes ({{ solicitudes|length }})</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'historial_solicitudes' %}">Ver historial</a></p>
 
 <table>
   <tr>

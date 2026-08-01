@@ -9,7 +9,25 @@
     {% endif %}
     <div>
       <h2 style="margin-bottom:4px;">{{ persona.apellido }}, {{ persona.nombre }}</h2>
-      <p style="color:#6b7280; margin:0;">Documento: {{ persona.documento }} · Club actual: {{ persona.club_actual|default:"sin club" }}</p>
+      <p style="color:#6b7280; margin:0; display:flex; align-items:center; gap:8px;">
+        Documento: {{ persona.documento }} · Club actual:
+        {% if persona.club_actual.escudo %}
+          <img src="{{ persona.club_actual.escudo.url }}" style="width:32px; height:32px; object-fit:contain;">
+        {% endif %}
+        {{ persona.club_actual|default:"sin club" }}
+      </p>
+      <p style="color:#6b7280; margin:4px 0 0;">
+        Fecha de nacimiento: {{ persona.fecha_nacimiento|date:"d/m/Y" }}{% if edad %} · {{ edad }} años{% endif %}
+      </p>
+      <p style="color:#6b7280; margin:4px 0 0;">
+        {% if persona.numero_carnet %}
+          Carnet N°: {{ persona.numero_carnet }}
+        {% elif persona.requiere_carnet %}
+          <span class="badge badge-pendiente">Carnet pendiente de tramitar</span>
+        {% else %}
+          Sin carnet cargado
+        {% endif %}
+      </p>
     </div>
   </div>
 </div>

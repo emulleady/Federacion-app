@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Usuario, Club, Categoria, Persona, DocumentoPersona,
     Vinculo, SolicitudPase, DocumentoSolicitud, LogAuditoria,
+    Torneo, InscripcionTorneo,
 )
 
 
@@ -16,8 +17,15 @@ class UsuarioAdmin(UserAdmin):
 
 @admin.register(Club)
 class ClubAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "codigo_afiliacion", "activo", "fecha_afiliacion")
+    list_display = ("nombre", "codigo_afiliacion", "activo", "fecha_afiliacion", "vista_escudo")
     search_fields = ("nombre", "codigo_afiliacion")
+
+    def vista_escudo(self, obj):
+        from django.utils.html import format_html
+        if obj.escudo:
+            return format_html('<img src="{}" style="height:48px; border-radius:4px;">', obj.escudo.url)
+        return "—"
+    vista_escudo.short_description = "Escudo"
 
 
 @admin.register(Categoria)
@@ -38,9 +46,9 @@ class VinculoInline(admin.TabularInline):
 
 @admin.register(Persona)
 class PersonaAdmin(admin.ModelAdmin):
-    list_display = ("apellido", "nombre", "documento", "tipo", "club_actual")
-    search_fields = ("apellido", "nombre", "documento")
-    list_filter = ("tipo",)
+    list_display = ("apellido", "nombre", "documento", "tipo", "club_actual", "numero_carnet", "requiere_carnet")
+    search_fields = ("apellido", "nombre", "documento", "numero_carnet")
+    list_filter = ("tipo", "requiere_carnet")
     inlines = [VinculoInline, DocumentoPersonaInline]
 
 
@@ -68,3 +76,16 @@ class SolicitudPaseAdmin(admin.ModelAdmin):
 class LogAuditoriaAdmin(admin.ModelAdmin):
     list_display = ("fecha", "usuario", "accion", "modelo_afectado")
     list_filter = ("modelo_afectado",)
+
+
+@admin.register(Torneo)
+class TorneoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "temporada", "activo", "precio_derechos_federativos", "precio_fondo_seleccion", "precio_carnet")
+    list_filter = ("activo",)
+
+
+@admin.register(InscripcionTorneo)
+class InscripcionTorneoAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "torneo", "estado", "monto_total", "pagado")
+    list_filter = ("estado", "pagado", "torneo")
+    search_fields = ("persona__apellido", "persona__documento")

@@ -1,0 +1,56 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Planilla de buena fe — {{ club.nombre }}</h2>
+  <p style="color:#6b7280; margin-top:-10px;">Tildá hasta 15 jugadores y completá el número de camiseta de cada uno. Al generar, se abre el PDF listo para imprimir.</p>
+
+  <form method="post" target="_blank">
+    {% csrf_token %}
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;">
+      <div><label>Torneo</label><input type="text" name="torneo"></div>
+      <div><label>Categoría</label><input type="text" name="categoria"></div>
+      <div><label>Lugar</label><input type="text" name="lugar"></div>
+      <div><label>Fecha</label><input type="date" name="fecha"></div>
+      <div><label>Delegada/o</label><input type="text" name="delegado" value="{{ request.user.username }}"></div>
+      <div><label>Hora de entrega</label><input type="time" name="hora_entrega"></div>
+    </div>
+
+    <h3>Plantel</h3>
+    <table style="margin-bottom:16px;">
+      <tr>
+        <th style="width:36px;"></th>
+        <th>Jugador</th>
+        <th>Carnet/DNI</th>
+        <th style="width:120px;">N° Camiseta</th>
+      </tr>
+      {% for p in jugadores %}
+      <tr>
+        <td><input type="checkbox" name="jugadores" value="{{ p.id }}"></td>
+        <td>{{ p.apellido }}, {{ p.nombre }}</td>
+        <td>{{ p.numero_carnet|default:p.documento }}</td>
+        <td><input type="text" name="camiseta_{{ p.id }}" style="width:80px;"></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4">No hay jugadores cargados en tu club todavía.</td></tr>
+      {% endfor %}
+    </table>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px;">
+      <div><label>DT</label><input type="text" name="dt"></div>
+      <div><label>AT</label><input type="text" name="at"></div>
+      <div><label>PF</label><input type="text" name="pf"></div>
+    </div>
+
+    <h3>Pagos</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; margin-bottom:20px;">
+      <div><label>Arbitraje — Efectivo</label><input type="text" name="arbitraje_efectivo"></div>
+      <div><label>Arbitraje — Transferencia</label><input type="text" name="arbitraje_transferencia"></div>
+      <div><label>Mesa — Efectivo</label><input type="text" name="mesa_efectivo"></div>
+      <div><label>Mesa — Transferencia</label><input type="text" name="mesa_transferencia"></div>
+    </div>
+
+    <button type="submit">Generar planilla PDF</button>
+  </form>
+</div>
+{% endblock %}

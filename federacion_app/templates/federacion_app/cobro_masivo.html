@@ -1,0 +1,153 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Cobros de torneos</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'historial_inscripciones' %}">Ver historial de cobros</a></p>
+
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
+  <div class="card" style="flex:1; min-width:220px;">
+    <h3>Pendiente de cobro por club</h3>
+    {% for nombre, monto in totales_club %}
+      <p style="display:flex; justify-content:space-between; margin:6px 0; font-size:14px;">
+        <span>{{ nombre }}</span> <strong>${{ monto|floatformat:2 }}</strong>
+      </p>
+    {% empty %}
+      <p style="color:#6b7280; font-size:14px;">No hay pagos pendientes.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="flex:1; min-width:220px;">
+    <h3>Pendiente de cobro por categoría</h3>
+    {% for nombre, monto in totales_categoria %}
+      <p style="display:flex; justify-content:space-between; margin:6px 0; font-size:14px;">
+        <span>{{ nombre }}</span> <strong>${{ monto|floatformat:2 }}</strong>
+      </p>
+    {% empty %}
+      <p style="color:#6b7280; font-size:14px;">No hay pagos pendientes.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="flex:1; min-width:220px; background:#0f2a4a; color:white;">
+    <h3 style="color:#a9c2de;">Total pendiente de cobro</h3>
+    <p style="font-size:28px; font-weight:700; margin:0 0 10px;">${{ total_general|floatformat:2 }}</p>
+    <p style="font-size:13px; color:#94a3b8; margin:0;">Ya cobrado: ${{ total_pagado|floatformat:2 }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:17px;">Cobrar / validar pagos</h2>
+  <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:200px;">
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">— Seleccionar —</option>
+        {% for t in torneos %}
+          <option value="{{ t.id }}" {% if torneo.id == t.id %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Categoría (opcional)</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for cat in categorias %}
+          <option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Club (opcional)</label>
+      <select name="club" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for c in clubes %}
+          <option value="{{ c.id }}" {% if club_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if torneo %}
+  {% if not torneo.precio_derechos_federativos and not torneo.precio_fondo_seleccion and not torneo.precio_carnet %}
+    <div class="mensaje" style="background:#fef2f2; border-left-color:#dc2626; color:#991b1b;">
+      Este torneo todavía no tiene los precios cargados. Andá al admin → Torneos → {{ torneo }} y completá
+      "Precio derechos federativos", "Precio fondo de selección" y "Precio carnet" antes de cobrar.
+    </div>
+  {% endif %}
+
+  <form method="post" id="form-cobro">
+    {% csrf_token %}
+    <input type="hidden" name="torneo" value="{{ torneo.id }}">
+    <input type="hidden" name="categoria" value="{{ categoria_id }}">
+    <input type="hidden" name="club" value="{{ club_id }}">
+
+    <table>
+      <tr>
+        <th>Jugador</th>
+        <th>Derechos federativos (${{ torneo.precio_derechos_federativos|default:"0" }})</th>
+        <th>Fondo de selección (${{ torneo.precio_fondo_seleccion|default:"0" }})</th>
+        <th>Carnet (${{ torneo.precio_carnet|default:"0" }})</th>
+        <th>Pago validado</th>
+      </tr>
+      {% for fila in filas %}
+      <tr>
+        <td>{{ fila.inscripcion.persona }} <span style="color:#6b7280; font-size:12px;">({{ fila.inscripcion.club }})</span></td>
+        <td style="text-align:center;">
+          <input type="checkbox" class="chk-der" name="der_{{ fila.inscripcion.id }}"
+                 data-monto="{{ torneo.precio_derechos_federativos|default:0 }}"
+                 {% if fila.der_marcado %}checked disabled{% endif %}
+                 onchange="recalcular()">
+        </td>
+        <td style="text-align:center;">
+          <input type="checkbox" class="chk-fondo" name="fondo_{{ fila.inscripcion.id }}"
+                 data-monto="{{ torneo.precio_fondo_seleccion|default:0 }}"
+                 {% if fila.fondo_marcado %}checked disabled{% endif %}
+                 onchange="recalcular()">
+        </td>
+        <td style="text-align:center;">
+          <input type="checkbox" class="chk-carnet" name="carnet_{{ fila.inscripcion.id }}"
+                 data-monto="{{ torneo.precio_carnet|default:0 }}"
+                 {% if fila.carnet_marcado %}checked disabled{% endif %}
+                 onchange="recalcular()">
+        </td>
+        <td style="text-align:center;">
+          <input type="checkbox" name="validar_{{ fila.inscripcion.id }}">
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No hay inscripciones pendientes de cobro para este filtro.</td></tr>
+      {% endfor %}
+      <tr style="font-weight:700; background:#f9fafb;">
+        <td>Suma del total</td>
+        <td style="text-align:center;" id="total-der">$0</td>
+        <td style="text-align:center;" id="total-fondo">$0</td>
+        <td style="text-align:center;" id="total-carnet">$0</td>
+        <td></td>
+      </tr>
+      <tr style="font-weight:700;">
+        <td colspan="3" style="text-align:right;">Suma de las tres columnas</td>
+        <td style="text-align:center;" id="total-general">$0</td>
+        <td></td>
+      </tr>
+    </table>
+
+    <p style="color:#6b7280; font-size:13px; margin-top:10px;">
+      Al tildar "Pago validado" y guardar, ese jugador desaparece de esta lista (pasa al historial de cobros).
+    </p>
+    <button type="submit" style="margin-top:6px;">Guardar</button>
+  </form>
+
+  <script>
+    function recalcular() {
+      let totalDer = 0, totalFondo = 0, totalCarnet = 0;
+      document.querySelectorAll('.chk-der:checked').forEach(c => totalDer += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-fondo:checked').forEach(c => totalFondo += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-carnet:checked').forEach(c => totalCarnet += parseFloat(c.dataset.monto || 0));
+      document.getElementById('total-der').textContent = '$' + totalDer.toFixed(2);
+      document.getElementById('total-fondo').textContent = '$' + totalFondo.toFixed(2);
+      document.getElementById('total-carnet').textContent = '$' + totalCarnet.toFixed(2);
+      document.getElementById('total-general').textContent = '$' + (totalDer + totalFondo + totalCarnet).toFixed(2);
+    }
+    recalcular();
+  </script>
+{% endif %}
+{% endblock %}

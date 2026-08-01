@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,15 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --azul: #2563eb;
-      --azul-oscuro: #1e40af;
+      --naranja: #f97316;
+      --naranja-oscuro: #ea580c;
+      --navy: #0f2a4a;
+      --navy-claro: #16385e;
       --verde: #16a34a;
       --rojo: #dc2626;
-      --gris-fondo: #f8f9fb;
+      --gris-fondo: #eef1f5;
       --gris-borde: #e5e7eb;
       --gris-texto: #6b7280;
-      --texto-oscuro: #111827;
-      --sombra: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --texto-oscuro: #0f2a4a;
+      --sombra: 0 4px 14px rgba(15,42,74,0.08), 0 1px 2px rgba(15,42,74,0.06);
     }
 
     * { box-sizing: border-box; }
@@ -24,15 +27,29 @@
     body {
       font-family: 'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
       background: var(--gris-fondo);
-      color: var(--texto-oscuro);
+      color: #1f2937;
       margin: 0;
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: url("{% static 'federacion_app/marca_agua.jpg' %}");
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      opacity: 0.16;
+      filter: grayscale(15%) brightness(0.85) contrast(1.1);
+      z-index: -1;
     }
 
     nav {
-      background: white;
-      border-bottom: 1px solid var(--gris-borde);
+      background: var(--navy);
       padding: 16px 28px;
       display: flex;
       justify-content: space-between;
@@ -42,22 +59,23 @@
       position: sticky;
       top: 0;
       z-index: 10;
+      box-shadow: 0 2px 10px rgba(15,42,74,0.25);
     }
 
     nav .usuario {
       font-size: 14px;
-      color: var(--gris-texto);
+      color: #a9c2de;
     }
-    nav .usuario strong { color: var(--texto-oscuro); }
+    nav .usuario strong { color: #ffffff; }
 
     nav .links a, nav .links button {
-      color: var(--azul);
+      color: #d5e3f2;
       text-decoration: none;
       font-size: 14px;
       margin-left: 16px;
       font-weight: 500;
     }
-    nav .links a:hover, nav .links button:hover { text-decoration: underline; }
+    nav .links a:hover, nav .links button:hover { color: var(--naranja); }
 
     .logout-btn {
       border: none;
@@ -75,11 +93,19 @@
 
     .card {
       background: white;
-      border: 1px solid var(--gris-borde);
       border-radius: 12px;
       padding: 28px 32px;
       margin-bottom: 20px;
       box-shadow: var(--sombra);
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--naranja), var(--navy));
     }
 
     h2 {
@@ -88,7 +114,7 @@
       font-weight: 700;
       color: var(--texto-oscuro);
     }
-    h3 { font-size: 15px; font-weight: 600; color: var(--gris-texto); }
+    h3 { font-size: 13px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: 0.04em; }
 
     table {
       width: 100%;
@@ -96,7 +122,6 @@
       background: white;
       border-radius: 12px;
       overflow: hidden;
-      border: 1px solid var(--gris-borde);
       box-shadow: var(--sombra);
     }
     th, td {
@@ -106,15 +131,15 @@
       font-size: 14px;
     }
     th {
-      background: var(--gris-fondo);
-      color: var(--gris-texto);
+      background: var(--navy);
+      color: white;
       font-weight: 600;
       text-transform: uppercase;
       font-size: 11px;
       letter-spacing: 0.05em;
     }
     tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #fafbfc; }
+    tbody tr:hover { background: #fef3ea; }
 
     .avatar {
       width: 36px;
@@ -123,14 +148,14 @@
       object-fit: cover;
       vertical-align: middle;
       margin-right: 10px;
-      border: 1px solid var(--gris-borde);
+      border: 2px solid var(--naranja);
     }
     .avatar-placeholder {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: #e0e7ff;
-      color: var(--azul-oscuro);
+      background: #fed7aa;
+      color: var(--naranja-oscuro);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -140,23 +165,26 @@
       margin-right: 10px;
     }
     .avatar-grande {
-      width: 84px;
-      height: 84px;
+      width: 130px;
+      height: 130px;
       border-radius: 50%;
       object-fit: cover;
-      border: 1px solid var(--gris-borde);
+      border: 3px solid var(--naranja);
+      flex-shrink: 0;
     }
     .avatar-grande-placeholder {
-      width: 84px;
-      height: 84px;
+      width: 130px;
+      height: 130px;
       border-radius: 50%;
-      background: #e0e7ff;
-      color: var(--azul-oscuro);
+      background: #fed7aa;
+      color: var(--naranja-oscuro);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
+      font-size: 42px;
       font-weight: 600;
+      flex-shrink: 0;
+      border: 3px solid var(--naranja);
     }
     .encabezado-persona {
       display: flex;
@@ -167,7 +195,7 @@
     form p { margin: 14px 0; }
     label { font-size: 13px; color: var(--gris-texto); display: block; margin-bottom: 4px; font-weight: 500; }
 
-    input[type=text], input[type=date], input[type=file],
+    input[type=text], input[type=date], input[type=file], input[type=time],
     select, textarea {
       width: 100%;
       padding: 8px 10px;
@@ -179,11 +207,11 @@
     }
     input:focus, select:focus, textarea:focus {
       outline: none;
-      border-color: var(--azul);
+      border-color: var(--naranja);
     }
 
     button, input[type=submit] {
-      background: var(--azul);
+      background: var(--naranja);
       color: white;
       border: none;
       padding: 10px 20px;
@@ -194,18 +222,19 @@
       margin-right: 8px;
       transition: background 0.15s ease;
     }
-    button:hover { background: var(--azul-oscuro); }
+    button:hover { background: var(--naranja-oscuro); }
 
     button[value="rechazar"] { background: var(--rojo); }
     button[value="rechazar"]:hover { background: #7f1d1d; }
     button[value="liberar"], button[value="aprobar"] { background: var(--verde); }
 
-    a { color: var(--azul); }
+    a { color: var(--navy); font-weight: 500; }
+    a:hover { color: var(--naranja); }
 
     .mensaje {
-      background: #ecfdf5;
-      border: 1px solid #a7f3d0;
-      color: var(--verde);
+      background: #fff7ed;
+      border-left: 4px solid var(--naranja);
+      color: var(--naranja-oscuro);
       padding: 10px 14px;
       border-radius: 6px;
       font-size: 14px;
@@ -223,6 +252,7 @@
     .badge-liberacion { background: #fef3c7; color: #92400e; }
     .badge-revision { background: #dbeafe; color: #1e40af; }
     .badge-aprobado { background: #dcfce7; color: #166534; }
+    .badge-cobrado { background: #dcfce7; color: #166534; }
     .badge-rechazado { background: #fee2e2; color: #991b1b; }
   </style>
 </head>
@@ -231,16 +261,23 @@
     {% if user.is_authenticated %}
       <div class="usuario">
         Hola, <strong>{{ user.username }}</strong>
-        ({{ user.get_rol_display }}{% if user.club %} — {{ user.club }}{% endif %})
+        ({{ user.get_rol_display }}{% if user.club %} —
+          {% if user.club.escudo %}<img src="{{ user.club.escudo.url }}" style="width:26px; height:26px; object-fit:contain; vertical-align:middle;">{% endif %}
+          {{ user.club }}{% endif %})
       </div>
       <div class="links">
         {% if user.rol == "delegado" %}
           <a href="{% url 'nueva_solicitud' %}">Nueva solicitud</a>
           <a href="{% url 'mis_solicitudes' %}">Mis solicitudes</a>
           <a href="{% url 'solicitudes_a_liberar' %}">Me piden jugadores</a>
+          <a href="{% url 'inscribir_torneo' %}">Inscribir a torneo</a>
+          <a href="{% url 'planilla_partido' %}">Planilla de partido</a>
         {% endif %}
         {% if user.rol == "federacion" %}
           <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
+          <a href="{% url 'padron_club' %}">Padrón por club</a>
+          <a href="{% url 'importar_excel' %}">Importar Excel</a>
+          <a href="{% url 'cobro_masivo' %}">Cobros de torneos</a>
         {% endif %}
         <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
         <form action="{% url 'logout' %}" method="post" style="display:inline;">

@@ -1,15 +1,12 @@
 {% extends "federacion_app/base.html" %}
 {% block content %}
-<h2>Mis solicitudes</h2>
-<p style="margin-bottom:16px;">
-  <a href="{% url 'nueva_solicitud' %}">+ Nueva solicitud</a> ·
-  <a href="{% url 'historial_mis_solicitudes' %}">Ver historial</a>
-</p>
-
+<h2>Historial de solicitudes</h2>
 <table>
   <tr>
     <th>Jugador</th>
     <th>Tipo</th>
+    <th>Club origen</th>
+    <th>Club destino</th>
     <th>Estado</th>
     <th>Fecha</th>
   </tr>
@@ -17,11 +14,13 @@
   <tr>
     <td>{{ s.persona }}</td>
     <td>{{ s.get_tipo_display }}</td>
+    <td>{{ s.club_origen|default:"—" }}</td>
+    <td>{{ s.club_destino }}</td>
     <td><span class="badge badge-{{ s.estado|slice:':10' }}">{{ s.get_estado_display }}</span></td>
-    <td>{{ s.fecha_creacion|date:"d/m/Y" }}</td>
+    <td>{{ s.fecha_resolucion|date:"d/m/Y"|default:s.fecha_creacion|date:"d/m/Y" }}</td>
   </tr>
   {% empty %}
-  <tr><td colspan="4">Todavía no cargaste ninguna solicitud.</td></tr>
+  <tr><td colspan="6">Todavía no hay solicitudes resueltas.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

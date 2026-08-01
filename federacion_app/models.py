@@ -49,6 +49,7 @@ class Club(models.Model):
     direccion = models.CharField(max_length=255, blank=True)
     fecha_afiliacion = models.DateField()
     activo = models.BooleanField(default=True)
+    escudo = models.ImageField(upload_to="escudos_clubes/", null=True, blank=True)
 
     class Meta:
         ordering = ["nombre"]
@@ -89,6 +90,8 @@ class Persona(models.Model):
     fecha_nacimiento = models.DateField()
     nacionalidad = models.CharField(max_length=50, blank=True)
     foto = models.ImageField(upload_to="fotos_personas/", null=True, blank=True)
+    numero_carnet = models.CharField(max_length=30, blank=True, help_text="Número de carnet de la federación, si ya lo tiene.")
+    requiere_carnet = models.BooleanField(default=False, help_text="Marcar si hay que tramitarle el carnet.")
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -257,6 +260,68 @@ class DocumentoSolicitud(models.Model):
 # ---------------------------------------------------------------------
 # AUDITORÍA (recomendado para un sistema con múltiples clubes operando)
 # ---------------------------------------------------------------------
+
+# ---------------------------------------------------------------------
+# TORNEOS E INSCRIPCIONES (con los cobros de la federación)
+# ---------------------------------------------------------------------
+
+class Torneo(models.Model):
+    nombre = models.CharField(max_length=150)
+    temporada = models.CharField(max_length=20, help_text="Ej: 2026, Apertura 2026")
+    activo = models.BooleanField(default=True)
+
+    # Precios fijos por concepto para este torneo. Se cargan una sola vez
+    # y se usan para el cobro masivo (tildar en vez de tipear cada monto).
+    precio_derechos_federativos = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    precio_fondo_seleccion = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    precio_carnet = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-temporada", "nombre"]
+
+    def __str__(self):
+        return f"{self.nombre} ({self.temporada})"
+
+
+class InscripcionTorneo(models.Model):
+    """
+    Inscripción de un jugador a un torneo puntual. Aunque el jugador ya
+    pertenezca al club, la federación cobra estos tres conceptos por
+    separado, con montos que varían torneo a torneo.
+    """
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente de cobro"),
+        ("cobrado", "Cobrado"),
+    ]
+
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="inscripciones_torneo")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="inscripciones_torneo")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, related_name="inscripciones")
+
+    derechos_federativos = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fondo_seleccion = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    carnet = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    pagado = models.BooleanField(default=False, help_text="Marcar cuando el club efectivamente pagó.")
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+    inscrito_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="inscripciones_creadas")
+    cobrado_por = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name="inscripciones_cobradas"
+    )
+    fecha_inscripcion = models.DateTimeField(auto_now_add=True)
+    fecha_cobro = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-fecha_inscripcion"]
+
+    @property
+    def monto_total(self):
+        return sum(v for v in [self.derechos_federativos, self.fondo_seleccion, self.carnet] if v is not None)
+
+    def __str__(self):
+        return f"{self.persona} — {self.torneo}"
+
 
 class LogAuditoria(models.Model):
     """

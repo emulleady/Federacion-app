@@ -1,0 +1,95 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Federación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: #0f172a;
+      overflow: hidden;
+    }
+
+    /* Foto de fondo a modo de marca de agua: tenue, para que no compita
+       con el contenido de arriba. Ajustá la opacidad a gusto. */
+    .marca-agua {
+      position: absolute;
+      inset: 0;
+      background-image: url("{% static 'federacion_app/marca_agua.jpg' %}");
+      background-size: cover;
+      background-position: center;
+      opacity: 0.18;
+      filter: grayscale(30%);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(15,23,42,0.4), rgba(15,23,42,0.85));
+    }
+
+    .contenido {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      color: white;
+      padding: 40px;
+    }
+
+    .logo {
+      width: 260px;
+      height: 260px;
+      object-fit: contain;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+
+    p.subtitulo {
+      color: #cbd5e1;
+      font-size: 15px;
+      margin: 0 0 32px;
+    }
+
+    .btn-ingresar {
+      display: inline-block;
+      background: #2563eb;
+      color: white;
+      text-decoration: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: background 0.15s ease;
+    }
+    .btn-ingresar:hover { background: #1e40af; }
+  </style>
+</head>
+<body>
+  <div class="marca-agua"></div>
+  <div class="overlay"></div>
+
+  <div class="contenido">
+    <img src="{% static 'federacion_app/logo.jpg' %}" class="logo" alt="Logo de la federación">
+    <h1>Sistema de gestión de la federación</h1>
+    <p class="subtitulo">Registro de jugadores, pases y clubes</p>
+    <a href="{% url 'login' %}" class="btn-ingresar">Ingresar</a>
+  </div>
+</body>
+</html>

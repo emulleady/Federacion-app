@@ -1,0 +1,67 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Inscripciones a torneos</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'historial_inscripciones' %}">Ver historial de cobros</a></p>
+
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
+  <div class="card" style="flex:1; min-width:220px;">
+    <h3 style="margin-top:0;">Pendiente de cobro por club</h3>
+    {% for nombre, monto in totales_club %}
+      <p style="display:flex; justify-content:space-between; margin:6px 0;">
+        <span>{{ nombre }}</span> <strong>${{ monto|floatformat:2 }}</strong>
+      </p>
+    {% empty %}
+      <p style="color:#6b7280;">No hay pagos pendientes.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="flex:1; min-width:220px;">
+    <h3 style="margin-top:0;">Pendiente de cobro por categoría</h3>
+    {% for nombre, monto in totales_categoria %}
+      <p style="display:flex; justify-content:space-between; margin:6px 0;">
+        <span>{{ nombre }}</span> <strong>${{ monto|floatformat:2 }}</strong>
+      </p>
+    {% empty %}
+      <p style="color:#6b7280;">No hay pagos pendientes.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="flex:1; min-width:220px; background:#1e293b; color:white;">
+    <h3 style="margin-top:0; color:#cbd5e1;">Total pendiente de cobro</h3>
+    <p style="font-size:28px; font-weight:700; margin:0 0 10px;">${{ total_general|floatformat:2 }}</p>
+    <p style="font-size:13px; color:#94a3b8; margin:0;">Ya cobrado: ${{ total_pagado|floatformat:2 }}</p>
+  </div>
+</div>
+
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Club</th>
+    <th>Torneo</th>
+    <th>Estado</th>
+    <th>Monto</th>
+    <th>Pagado</th>
+    <th></th>
+  </tr>
+  {% for i in inscripciones %}
+  <tr>
+    <td>{{ i.persona }}</td>
+    <td>{{ i.club }}</td>
+    <td>{{ i.torneo }}</td>
+    <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
+    <td>{% if i.estado == "cobrado" %}${{ i.monto_total }}{% else %}—{% endif %}</td>
+    <td>
+      {% if i.estado == "cobrado" %}
+      <form method="post" action="{% url 'marcar_pagado' i.id %}">
+        {% csrf_token %}
+        <input type="checkbox" onchange="this.form.submit()" {% if i.pagado %}checked{% endif %}>
+      </form>
+      {% else %}—{% endif %}
+    </td>
+    <td><a href="{% url 'cobrar_inscripcion' i.id %}">{% if i.estado == "cobrado" %}Editar{% else %}Cobrar{% endif %}</a></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7">No hay inscripciones todavía.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
