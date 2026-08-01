@@ -127,6 +127,12 @@ STORAGES = {
     },
 }
 
+# django-cloudinary-storage todavía revisa este nombre viejo (previo al
+# diccionario STORAGES de Django 4.2+) durante collectstatic. Sin esto,
+# el build se rompe con AttributeError. Es solo un puente de compatibilidad,
+# el que realmente manda es STORAGES de arriba.
+STATICFILES_STORAGE = STORAGES["staticfiles"]["BACKEND"]
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
