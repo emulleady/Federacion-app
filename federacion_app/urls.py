@@ -12,6 +12,7 @@ urlpatterns = [
     path("solicitudes/liberar/", views.solicitudes_a_liberar, name="solicitudes_a_liberar"),
     path("solicitudes/liberar/<int:solicitud_id>/", views.liberar_solicitud, name="liberar_solicitud"),
     path("torneos/inscribir/", views.inscribir_torneo, name="inscribir_torneo"),
+    path("torneos/formulario-12/", views.formulario_12, name="formulario_12"),
     path("planilla/", views.planilla_partido, name="planilla_partido"),
 
     # Federación

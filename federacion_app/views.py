@@ -970,3 +970,263 @@ def buscar_persona(request):
     return render(request, "federacion_app/buscar_persona.html", {
         "resultados": resultados, "query": query,
     })
+
+
+# ---------------------------------------------------------------------
+# FORMULARIO 12 (inscripción por categoría, jugadores + cuerpo técnico)
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_delegado)
+def formulario_12(request):
+    from .forms import TecnicoQuickForm
+    from .models import InscripcionTorneo, Torneo
+
+    club = request.user.club
+    torneos = Torneo.objects.filter(activo=True)
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    torneo_id = request.POST.get("torneo") or request.GET.get("torneo")
+    categoria_id = request.POST.get("categoria") or request.GET.get("categoria")
+    categoria = get_object_or_404(Categoria, id=categoria_id) if categoria_id else None
+
+    # Alta rápida de cuerpo técnico, sin salir de esta pantalla
+    tecnico_form = TecnicoQuickForm()
+    if request.method == "POST" and request.POST.get("accion") == "agregar_tecnico":
+        tecnico_form = TecnicoQuickForm(request.POST)
+        if tecnico_form.is_valid() and categoria:
+            documento = tecnico_form.cleaned_data["documento"]
+            persona, creada = Persona.objects.get_or_create(
+                documento=documento,
+                defaults={
+                    "tipo": "tecnico",
+                    "nombre": tecnico_form.cleaned_data["nombre"],
+                    "apellido": tecnico_form.cleaned_data["apellido"],
+                    "fecha_nacimiento": date.today(),
+                    "rol_tecnico": tecnico_form.cleaned_data["rol_tecnico"],
+                },
+            )
+            if not persona.vinculos.filter(club=club, fecha_fin__isnull=True).exists():
+                Vinculo.objects.create(
+                    persona=persona, club=club, categoria=categoria, fecha_inicio=date.today()
+                )
+            messages.success(request, f"{persona} agregado al cuerpo técnico.")
+            url = f"/torneos/formulario-12/?torneo={torneo_id or ''}&categoria={categoria_id or ''}"
+            return redirect(url)
+        else:
+            messages.error(request, "Elegí una categoría antes de agregar cuerpo técnico.")
+
+    jugadores, tecnicos = [], []
+    if categoria:
+        base = Persona.objects.filter(
+            vinculos__club=club, vinculos__categoria=categoria, vinculos__fecha_fin__isnull=True
+        ).distinct()
+        jugadores = base.filter(tipo="jugador").order_by("apellido")
+        tecnicos = base.filter(tipo="tecnico").order_by("apellido")
+
+    # Generar el/los Formulario 12 en PDF
+    if request.method == "POST" and request.POST.get("accion") == "generar":
+        torneo = get_object_or_404(Torneo, id=torneo_id)
+        ids_seleccionados = request.POST.getlist("personas")
+        seleccionadas = list(Persona.objects.filter(id__in=ids_seleccionados))
+        orden = {int(pid): i for i, pid in enumerate(ids_seleccionados)}
+        seleccionadas.sort(key=lambda p: orden.get(p.id, 999))
+
+        if not seleccionadas:
+            messages.error(request, "Seleccioná al menos una persona.")
+        else:
+            # Actualiza el padrón: cada jugador seleccionado queda con
+            # inscripción activa para este torneo (si no la tenía ya).
+            for p in seleccionadas:
+                if p.tipo == "jugador":
+                    InscripcionTorneo.objects.get_or_create(
+                        persona=p, club=club, torneo=torneo,
+                        defaults={"inscrito_por": request.user},
+                    )
+            return _generar_pdf_formulario_12(club, torneo, categoria, seleccionadas, request.user)
+
+    return render(request, "federacion_app/formulario_12.html", {
+        "torneos": torneos, "categorias": categorias,
+        "torneo_id": torneo_id, "categoria": categoria,
+        "jugadores": jugadores, "tecnicos": tecnicos,
+        "tecnico_form": tecnico_form,
+    })
+
+
+def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer, Paragraph, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        topMargin=0.4 * cm, bottomMargin=0.4 * cm, leftMargin=0.8 * cm, rightMargin=0.8 * cm,
+    )
+    estilos = getSampleStyleSheet()
+    estilo_chico = ParagraphStyle("chico", parent=estilos["Normal"], fontSize=6.3, alignment=TA_JUSTIFY, leading=7)
+    estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=7.5, alignment=TA_LEFT, leading=9)
+    estilo_negrita = ParagraphStyle("negrita", parent=estilos["Normal"], fontSize=9, alignment=TA_LEFT, fontName="Helvetica-Bold", leading=10)
+    estilo_centro = ParagraphStyle("centro", parent=estilos["Normal"], fontSize=7.5, alignment=TA_CENTER, leading=9)
+    elementos = []
+
+    logo_federacion = finders.find("federacion_app/logo.jpg")
+    img_federacion_chico = Image(logo_federacion, width=1.4 * cm, height=1.4 * cm) if logo_federacion else ""
+    img_club_chico = Image(club.escudo.path, width=1.4 * cm, height=1.4 * cm) if club.escudo else ""
+
+    texto_legal = (
+        "Los integrantes de la presente planilla declaran conocer y aceptar las condiciones absolutas de "
+        "amateurismo del Futsal / Fútbol de Salón, conocer y aceptar las reglas de juego y el alto grado de "
+        "competitividad alcanzado en los eventos organizados por las entidades afiliadas a la Confederación "
+        "Argentina de Futsal, conocer y aceptar la existencia de potenciales riesgos para la salud en la práctica "
+        "de nuestro deporte, declaran conocer y aceptar las obligaciones Estatutarias y Reglamentarias a las que "
+        "adhiere el jugador FEDERADO de la C.A.F.S., también se comprometen a mantener vigente la cobertura del "
+        "seguro obligatorio y que por ello liberan de toda responsabilidad a la Entidad, dirigentes y miembros de "
+        "los diferentes cuerpos que la integran, por cualquier suceso que pudiera ocurrir en los traslados, actos, "
+        "durante y después de la competencia a la que corresponde esta planilla de fichaje."
+    )
+
+    # Solo los jugadores ocupan las 20 líneas numeradas; el cuerpo técnico
+    # va aparte, en 4 renglones fijos (uno por rol).
+    jugadores = [p for p in personas if p.tipo == "jugador"]
+    tecnicos = [p for p in personas if p.tipo == "tecnico"]
+    tecnico_por_rol = {}
+    for t in tecnicos:
+        if t.rol_tecnico and t.rol_tecnico not in tecnico_por_rol:
+            tecnico_por_rol[t.rol_tecnico] = t
+
+    grupos = [jugadores[i:i + 20] for i in range(0, len(jugadores), 20)] or [[]]
+
+    for numero_form, grupo in enumerate(grupos, start=1):
+        # --- Encabezado ---
+        encabezado_izq = Paragraph(
+            "<b>FEDERACIÓN FUEGUINA DE FUTBOL DE SALON -FUTSAL-</b><br/>"
+            "Afiliada a la CONFEDERACION ARGENTINA DE FUTBOL DE SALON",
+            estilo_normal,
+        )
+        encabezado_centro = Table([["FORM-12"]], colWidths=[3 * cm], rowHeights=[1 * cm])
+        encabezado_centro.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTSIZE", (0, 0), (-1, -1), 12),
+        ]))
+        encabezado_der = Paragraph(
+            f"Fecha presentación: {date.today().strftime('%d/%m/%Y')}<br/>"
+            f"<b>Planilla Fichaje</b><br/>"
+            f"Denominación real/legal Club/ Agrupación<br/>"
+            f"<b>{club.nombre.upper()}</b>",
+            estilo_normal,
+        )
+        tabla_encabezado = Table(
+            [[encabezado_izq, encabezado_centro, encabezado_der]],
+            colWidths=[9 * cm, 3.5 * cm, 12 * cm],
+        )
+        tabla_encabezado.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        elementos.append(tabla_encabezado)
+        elementos.append(Spacer(1, 3))
+
+        tabla_datos = Table(
+            [[f"Provincia: Tierra del Fuego   Ciudad: Río Grande",
+              f"EVENTO DEPORTIVO: {torneo}",
+              f"CATEGORIA: {categoria}"]],
+            colWidths=[9 * cm, 8 * cm, 7.5 * cm],
+        )
+        tabla_datos.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.black),
+            ("INNERGRID", (0, 0), (-1, -1), 0.7, colors.black),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        elementos.append(tabla_datos)
+        elementos.append(Spacer(1, 3))
+        elementos.append(Paragraph(texto_legal, estilo_chico))
+        elementos.append(Spacer(1, 3))
+
+        # --- Tabla principal ---
+        encabezados_tabla = ["ORDEN", "CARGO", "CARNET", "APELLIDOS", "NOMBRES",
+                              "DOCUMENTO (DNI o CEDULA)", "FECHA NACIMIENTO", "Otros / Varios"]
+        filas = [encabezados_tabla]
+
+        for i in range(1, 21):
+            if i <= len(grupo):
+                p = grupo[i - 1]
+                filas.append([
+                    str(i), "JUGADOR", p.numero_carnet or "", p.apellido, p.nombre,
+                    p.documento, p.fecha_nacimiento.strftime("%d/%m/%Y") if p.fecha_nacimiento else "", "",
+                ])
+            else:
+                filas.append([str(i), "JUGADOR", "", "", "", "", "", ""])
+
+        # Los 4 renglones fijos de cuerpo técnico, sin número de orden
+        for rol_key, etiqueta in [("dt", "Director Tecnico"), ("ayudante", "Ayu. Tecnico"),
+                                    ("pf", "Preparador Fisico"), ("delegado", "DELEGADO")]:
+            t = tecnico_por_rol.get(rol_key)
+            if t:
+                filas.append(["", etiqueta, t.numero_carnet or "", t.apellido, t.nombre,
+                               t.documento, t.fecha_nacimiento.strftime("%d/%m/%Y") if t.fecha_nacimiento else "", ""])
+            else:
+                filas.append(["", etiqueta, "", "", "", "", "", ""])
+
+        tabla = Table(
+            filas,
+            colWidths=[1.3 * cm, 2.7 * cm, 2 * cm, 4 * cm, 4 * cm, 3.8 * cm, 3 * cm, 2.7 * cm],
+            repeatRows=1,
+        )
+        tabla.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.6, colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f2a4a")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("ALIGN", (0, 0), (2, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ]))
+        elementos.append(tabla)
+        elementos.append(Spacer(1, 3))
+
+        # --- Certificación, sellos y firmas ---
+        cert_izq = Paragraph(
+            "CERTIFICO QUE LOS DATOS ELEVADOS SON VERDADEROS<br/>Y AVALADOS POR NUESTRA ENTIDAD",
+            estilo_centro,
+        )
+        cert_der = Paragraph(
+            "LOS DATOS ELEVADOS SON CONSIDERADOS VERDADEROS<br/>Y AVALADOS POR NUESTRA ENTIDAD",
+            estilo_centro,
+        )
+        firma_izq = Paragraph("_______________________________<br/>Firma Presidente Club", estilo_centro)
+        firma_der = Paragraph("_______________________________<br/>Firma Responsable Fo.Fu.Futsal", estilo_centro)
+        sello_club = Paragraph("SELLO CLUB", estilo_centro)
+        sello_federacion = Paragraph("Sello Federación", estilo_centro)
+
+        tabla_firmas = Table(
+            [
+                [cert_izq, img_club_chico, img_federacion_chico, cert_der],
+                ["", "", "", ""],  # espacio en blanco para firmar a mano
+                [firma_izq, sello_club, sello_federacion, firma_der],
+            ],
+            colWidths=[8 * cm, 2.5 * cm, 2.5 * cm, 8 * cm],
+            rowHeights=[None, 1.3 * cm, None],
+        )
+        tabla_firmas.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ]))
+        elementos.append(tabla_firmas)
+
+        if numero_form < len(grupos):
+            elementos.append(PageBreak())
+
+    doc.build(elementos)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="formulario12_{club.nombre}_{categoria}.pdf"'
+    return response

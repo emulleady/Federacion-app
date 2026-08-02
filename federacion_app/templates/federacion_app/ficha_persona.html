@@ -29,6 +29,15 @@
         {% endif %}
       </p>
     </div>
+    <div style="margin-left:auto; display:flex; align-items:center; justify-content:center; width:130px; height:130px; flex-shrink:0;">
+      {% if persona.club_actual.escudo %}
+        <img src="{{ persona.club_actual.escudo.url }}" style="max-width:130px; max-height:130px; object-fit:contain;">
+      {% else %}
+        <div style="width:130px; height:130px; border-radius:12px; background:#f4f6f9; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-weight:600; font-size:13px; text-align:center;">
+          SIN CLUB
+        </div>
+      {% endif %}
+    </div>
   </div>
 </div>
 

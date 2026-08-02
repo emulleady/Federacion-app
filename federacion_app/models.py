@@ -84,6 +84,17 @@ class Persona(models.Model):
     ]
 
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    ROL_TECNICO_CHOICES = [
+        ("dt", "DT"),
+        ("ayudante", "Ayudante técnico"),
+        ("pf", "Preparador físico"),
+        ("delegado", "Delegado"),
+        ("otro", "Otro"),
+    ]
+    rol_tecnico = models.CharField(
+        max_length=10, choices=ROL_TECNICO_CHOICES, blank=True,
+        help_text="Solo si tipo='tecnico'",
+    )
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
     documento = models.CharField(max_length=20, unique=True)

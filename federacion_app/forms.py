@@ -37,24 +37,37 @@ class SolicitudPaseForm(forms.ModelForm):
         documento = cleaned.get("documento")
         tipo = cleaned.get("tipo")
 
-        # Si el jugador no existe todavía, para un alta nueva son
-        # obligatorios nombre, apellido y fecha de nacimiento.
-        if documento and not Persona.objects.filter(documento=documento).exists():
-            if tipo == "alta_nueva":
-                faltantes = [
-                    campo for campo in ("nombre", "apellido", "fecha_nacimiento")
-                    if not cleaned.get(campo)
-                ]
-                if faltantes:
-                    raise forms.ValidationError(
-                        f"El jugador no existe en el sistema todavía. "
-                        f"Completá también: {', '.join(faltantes)}."
-                    )
-            else:
+        if documento:
+            ya_existe = Persona.objects.filter(documento=documento).exists()
+
+            # Alta nueva con un DNI que ya está en el sistema: no se permite,
+            # para eso está el pase o el cambio de categoría.
+            if tipo == "alta_nueva" and ya_existe:
+                persona_existente = Persona.objects.get(documento=documento)
                 raise forms.ValidationError(
-                    "Ese documento no está registrado. Para un pase o cambio de "
-                    "categoría, el jugador ya tiene que existir en el sistema."
+                    f"Ese documento ya está registrado a nombre de {persona_existente} "
+                    f"(club actual: {persona_existente.club_actual or 'sin club'}). "
+                    f"Si necesitás sumarlo a tu club, usá 'Pase entre clubes' en vez de 'Alta de jugador nuevo'."
                 )
+
+            # Si el jugador no existe todavía, para un alta nueva son
+            # obligatorios nombre, apellido y fecha de nacimiento.
+            if not ya_existe:
+                if tipo == "alta_nueva":
+                    faltantes = [
+                        campo for campo in ("nombre", "apellido", "fecha_nacimiento")
+                        if not cleaned.get(campo)
+                    ]
+                    if faltantes:
+                        raise forms.ValidationError(
+                            f"El jugador no existe en el sistema todavía. "
+                            f"Completá también: {', '.join(faltantes)}."
+                        )
+                else:
+                    raise forms.ValidationError(
+                        "Ese documento no está registrado. Para un pase o cambio de "
+                        "categoría, el jugador ya tiene que existir en el sistema."
+                    )
         return cleaned
 
 
@@ -100,3 +113,11 @@ class ImportarExcelForm(forms.Form):
         label="Solo simular (no guarda nada, solo muestra el resultado)",
         required=False, initial=True,
     )
+
+
+class TecnicoQuickForm(forms.Form):
+    """Alta rápida de un miembro del cuerpo técnico, desde la pantalla del Formulario 12."""
+    documento = forms.CharField(label="Documento", max_length=20)
+    nombre = forms.CharField(label="Nombre", max_length=100)
+    apellido = forms.CharField(label="Apellido", max_length=100)
+    rol_tecnico = forms.ChoiceField(label="Rol", choices=Persona.ROL_TECNICO_CHOICES)

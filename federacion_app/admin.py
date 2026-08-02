@@ -46,9 +46,9 @@ class VinculoInline(admin.TabularInline):
 
 @admin.register(Persona)
 class PersonaAdmin(admin.ModelAdmin):
-    list_display = ("apellido", "nombre", "documento", "tipo", "club_actual", "numero_carnet", "requiere_carnet")
+    list_display = ("apellido", "nombre", "documento", "tipo", "rol_tecnico", "club_actual", "numero_carnet", "requiere_carnet")
     search_fields = ("apellido", "nombre", "documento", "numero_carnet")
-    list_filter = ("tipo", "requiere_carnet")
+    list_filter = ("tipo", "rol_tecnico", "requiere_carnet")
     inlines = [VinculoInline, DocumentoPersonaInline]
 
 

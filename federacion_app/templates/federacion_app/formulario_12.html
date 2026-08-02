@@ -1,0 +1,87 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Formulario 12 — Inscripción por categoría</h2>
+  <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:200px;">
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">— Seleccionar —</option>
+        {% for t in torneos %}
+          <option value="{{ t.id }}" {% if torneo_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Categoría (obligatoria — un formulario por categoría)</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">— Seleccionar —</option>
+        {% for cat in categorias %}
+          <option value="{{ cat.id }}" {% if categoria.id == cat.id %}selected{% endif %}>{{ cat.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if categoria %}
+<div class="card">
+  <h3>Agregar cuerpo técnico a esta categoría</h3>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="agregar_tecnico">
+    <input type="hidden" name="torneo" value="{{ torneo_id }}">
+    <input type="hidden" name="categoria" value="{{ categoria.id }}">
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:10px; align-items:end;">
+      <div><label>Documento</label>{{ tecnico_form.documento }}</div>
+      <div><label>Nombre</label>{{ tecnico_form.nombre }}</div>
+      <div><label>Apellido</label>{{ tecnico_form.apellido }}</div>
+      <div><label>Rol</label>{{ tecnico_form.rol_tecnico }}</div>
+      <div><button type="submit">Agregar</button></div>
+    </div>
+  </form>
+</div>
+
+<form method="post" target="_blank">
+  {% csrf_token %}
+  <input type="hidden" name="accion" value="generar">
+  <input type="hidden" name="torneo" value="{{ torneo_id }}">
+  <input type="hidden" name="categoria" value="{{ categoria.id }}">
+
+  <h3>Jugadores — {{ categoria.nombre }}</h3>
+  <table style="margin-bottom:20px;">
+    <tr><th style="width:36px;"></th><th>Jugador</th><th>Carnet/DNI</th></tr>
+    {% for p in jugadores %}
+    <tr>
+      <td><input type="checkbox" name="personas" value="{{ p.id }}" checked></td>
+      <td>{{ p.apellido }}, {{ p.nombre }}</td>
+      <td>{{ p.numero_carnet|default:p.documento }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3">No hay jugadores cargados en esta categoría todavía.</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Cuerpo técnico — {{ categoria.nombre }}</h3>
+  <table style="margin-bottom:20px;">
+    <tr><th style="width:36px;"></th><th>Nombre</th><th>Documento</th><th>Rol</th></tr>
+    {% for p in tecnicos %}
+    <tr>
+      <td><input type="checkbox" name="personas" value="{{ p.id }}" checked></td>
+      <td>{{ p.apellido }}, {{ p.nombre }}</td>
+      <td>{{ p.documento }}</td>
+      <td>{{ p.get_rol_tecnico_display }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4">Todavía no agregaste cuerpo técnico para esta categoría.</td></tr>
+    {% endfor %}
+  </table>
+
+  <p style="color:#6b7280; font-size:13px;">
+    Se van a generar tantos "Formulario N°12" como hagan falta, de a 20 personas por hoja.
+    Los jugadores tildados quedan sumados al padrón activo de este torneo.
+  </p>
+  <button type="submit">Generar Formulario 12 (PDF)</button>
+</form>
+{% endif %}
+{% endblock %}
