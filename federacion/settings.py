@@ -97,7 +97,7 @@ USE_TZ = True
 # -------------------------------------------------------------
 # ARCHIVOS ESTÁTICOS (CSS) - Whitenoise, siempre local al servidor
 # -------------------------------------------------------------
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # -------------------------------------------------------------
