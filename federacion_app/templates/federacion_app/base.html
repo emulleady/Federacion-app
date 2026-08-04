@@ -258,6 +258,7 @@
     .badge-activa { background: #fee2e2; color: #991b1b; }
     .badge-rechazado { background: #fee2e2; color: #991b1b; }
   </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body>
   <nav>
@@ -282,6 +283,11 @@
           </a>
           <a href="{% url 'mis_tarjetas' %}">Tarjetas</a>
           <a href="{% url 'planilla_partido' %}">Planilla de partido</a>
+          <a href="{% url 'notificaciones' %}">
+            Notificaciones
+            {% if notificaciones_no_leidas_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ notificaciones_no_leidas_count }}</span>{% endif %}
+          </a>
+          <a href="{% url 'institucional' %}">Institucional</a>
         {% endif %}
         {% if user.rol == "federacion" %}
           <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
@@ -293,6 +299,11 @@
           <a href="{% url 'sanciones_pendientes' %}">Sanciones pendientes</a>
           <a href="{% url 'historial_presentaciones_formulario12' %}">Historial Form. 12</a>
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
+          <a href="{% url 'crear_notificacion' %}">
+            Notificar clubes
+            {% if acuses_nuevos_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ acuses_nuevos_count }}</span>{% endif %}
+          </a>
+          <a href="{% url 'institucional' %}">Institucional</a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
@@ -318,5 +329,21 @@
     {% block content %}
     {% endblock %}
   </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/es.js"></script>
+  <script>
+    // Fuerza que TODOS los campos de fecha del sitio se vean en dd/mm/aaaa,
+    // sin importar el idioma configurado en el navegador de cada persona.
+    document.querySelectorAll('input[type="date"]').forEach(function (el) {
+      el.type = 'text';
+      flatpickr(el, {
+        dateFormat: 'Y-m-d',   // lo que se manda al servidor (formato que Django espera)
+        altInput: true,
+        altFormat: 'd/m/Y',    // lo que se ve en pantalla
+        locale: 'es',
+        allowInput: true,
+      });
+    });
+  </script>
 </body>
 </html>

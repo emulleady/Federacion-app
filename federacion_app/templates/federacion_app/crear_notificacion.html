@@ -1,0 +1,56 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Enviar notificación a clubes</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div style="margin-bottom:14px;">
+      <label>Título</label>
+      <input type="text" name="titulo" required>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label>Mensaje</label>
+      <textarea name="mensaje" rows="4" required></textarea>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label>Destinatarios (dejá vacío para enviar a todos los clubes)</label>
+      <select name="clubes" multiple style="height:120px;">
+        {% for c in clubes %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit">Enviar notificación</button>
+  </form>
+</div>
+
+<h3>Últimas enviadas</h3>
+{% for fila in enviadas %}
+<div class="card">
+  <h3 style="margin:0 0 4px;">{{ fila.notificacion.titulo }}</h3>
+  <p style="color:#6b7280; font-size:12px; margin:0 0 10px;">
+    {{ fila.notificacion.fecha_creacion|date:"d/m/Y H:i" }} ·
+    {% if fila.notificacion.destinatarios.all %}{% for c in fila.notificacion.destinatarios.all %}{{ c.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}Todos los clubes{% endif %}
+  </p>
+
+  <table>
+    <tr><th>Club</th><th>Acuse</th><th>Respuesta</th></tr>
+    {% for fc in fila.filas_clubes %}
+    <tr>
+      <td>{{ fc.club.nombre }}</td>
+      <td>
+        {% if fc.acuse.fecha_acuse %}
+          ✓ {{ fc.acuse.fecha_acuse|date:"d/m/Y" }}
+        {% elif fc.acuse %}
+          <span style="color:#92400e;">La vio, sin acusar</span>
+        {% else %}
+          <span style="color:#9ca3af;">Todavía no la vio</span>
+        {% endif %}
+      </td>
+      <td>{{ fc.acuse.respuesta|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% empty %}
+<p style="color:#6b7280;">Todavía no enviaste ninguna notificación.</p>
+{% endfor %}
+{% endblock %}

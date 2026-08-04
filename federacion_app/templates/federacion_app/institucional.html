@@ -1,0 +1,69 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Institucional</h2>
+<p style="color:#6b7280; font-size:13px;">Reglamentos, formularios y circulares de la federación.</p>
+
+{% if user.rol == "federacion" %}
+<div class="card">
+  <h3>Subir documento</h3>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="subir">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div>
+        <label>Título</label>
+        <input type="text" name="titulo" placeholder="Ej: Reglamento de tarjetas 2026">
+      </div>
+      <div>
+        <label>Tipo</label>
+        <select name="tipo">
+          <option value="reglamento">Reglamento</option>
+          <option value="formulario">Formulario</option>
+          <option value="circular">Circular</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Descripción (opcional)</label>
+        <input type="text" name="descripcion">
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Archivo</label>
+        <input type="file" name="archivo" required>
+      </div>
+    </div>
+    <button type="submit" style="margin-top:14px;">Subir</button>
+  </form>
+</div>
+{% endif %}
+
+<table>
+  <tr>
+    <th>Título</th>
+    <th>Tipo</th>
+    <th>Descripción</th>
+    <th>Subido</th>
+    <th></th>
+  </tr>
+  {% for d in documentos %}
+  <tr>
+    <td><a href="{{ d.archivo.url }}" target="_blank">{{ d.titulo }}</a></td>
+    <td>{{ d.get_tipo_display }}</td>
+    <td>{{ d.descripcion|default:"—" }}</td>
+    <td>{{ d.fecha_subida|date:"d/m/Y" }}</td>
+    <td>
+      {% if user.rol == "federacion" %}
+      <form method="post" onsubmit="return confirm('¿Eliminar este documento?');">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="borrar">
+        <input type="hidden" name="documento_id" value="{{ d.id }}">
+        <button type="submit" style="padding:4px 10px; font-size:12px; background:#dc2626;">Eliminar</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">Todavía no hay documentos cargados.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

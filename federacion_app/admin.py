@@ -5,6 +5,7 @@ from .models import (
     Vinculo, SolicitudPase, DocumentoSolicitud, LogAuditoria,
     Torneo, InscripcionTorneo, PresentacionFormulario12,
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
+    Notificacion, DocumentoInstitucional, NotificacionAcuse,
 )
 
 
@@ -118,3 +119,22 @@ class SancionDisciplinariaAdmin(admin.ModelAdmin):
     list_display = ("persona", "club", "fecha_sancion", "estado", "cargada_por")
     list_filter = ("estado",)
     search_fields = ("persona__apellido", "persona__documento", "motivo")
+
+
+@admin.register(Notificacion)
+class NotificacionAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "creada_por", "fecha_creacion")
+    search_fields = ("titulo", "mensaje")
+
+
+@admin.register(DocumentoInstitucional)
+class DocumentoInstitucionalAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "tipo", "subido_por", "fecha_subida")
+    list_filter = ("tipo",)
+    search_fields = ("titulo",)
+
+
+@admin.register(NotificacionAcuse)
+class NotificacionAcuseAdmin(admin.ModelAdmin):
+    list_display = ("notificacion", "club", "fecha_acuse", "fecha_respuesta")
+    list_filter = ("notificacion",)

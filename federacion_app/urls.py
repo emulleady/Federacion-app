@@ -53,4 +53,12 @@ urlpatterns = [
     # Consejo de disciplina
     path("disciplina/", views.panel_disciplina, name="panel_disciplina"),
     path("disciplina/<int:sancion_id>/resolver/", views.resolver_sancion_disciplinaria, name="resolver_sancion_disciplinaria"),
+
+    # Notificaciones
+    path("notificaciones/crear/", views.crear_notificacion, name="crear_notificacion"),
+    path("notificaciones/", views.notificaciones, name="notificaciones"),
+    path("notificaciones/<int:notificacion_id>/acusar/", views.acusar_notificacion, name="acusar_notificacion"),
+
+    # Institucional
+    path("institucional/", views.institucional, name="institucional"),
 ]

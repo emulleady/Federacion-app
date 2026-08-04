@@ -475,6 +475,7 @@ class SancionDisciplinaria(models.Model):
     informe = models.FileField(upload_to="informes_disciplina/", null=True, blank=True)
     fecha_sancion = models.DateField()
     cantidad_fechas = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Cantidad de fechas de suspensión, si corresponde")
+    cantidad_anios = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Cantidad de años de suspensión, si corresponde en vez de fechas")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="activa")
 
     cargada_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="sanciones_disciplinarias_cargadas")
@@ -485,3 +486,82 @@ class SancionDisciplinaria(models.Model):
 
     def __str__(self):
         return f"{self.persona} — {self.motivo[:40]}"
+
+
+# ---------------------------------------------------------------------
+# NOTIFICACIONES E INSTITUCIONAL
+# ---------------------------------------------------------------------
+
+class Notificacion(models.Model):
+    """
+    Aviso de la federación a los clubes (cambios, avisos, recordatorios).
+    Si no se elige ningún club destinatario, se manda a todos.
+    """
+    titulo = models.CharField(max_length=150)
+    mensaje = models.TextField()
+    destinatarios = models.ManyToManyField(
+        Club, blank=True, related_name="notificaciones",
+        help_text="Dejar vacío para enviar a todos los clubes.",
+    )
+    leida_por = models.ManyToManyField(Usuario, blank=True, related_name="notificaciones_leidas")
+
+    creada_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="notificaciones_creadas")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return self.titulo
+
+    def es_para(self, club):
+        return not self.destinatarios.exists() or self.destinatarios.filter(id=club.id).exists()
+
+
+class NotificacionAcuse(models.Model):
+    """
+    Acuse de recibo de un club sobre una notificación, con respuesta
+    opcional. Una fila por club por notificación.
+    """
+    notificacion = models.ForeignKey(Notificacion, on_delete=models.CASCADE, related_name="acuses")
+    club = models.ForeignKey(Club, on_delete=models.CASCADE, related_name="acuses_notificaciones")
+
+    acusado_por = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL)
+    fecha_acuse = models.DateTimeField(null=True, blank=True)
+
+    respuesta = models.TextField(blank=True)
+    fecha_respuesta = models.DateTimeField(null=True, blank=True)
+
+    visto_por_federacion = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["notificacion", "club"], name="un_acuse_por_club_por_notificacion")
+        ]
+
+    def __str__(self):
+        return f"Acuse de {self.club} — {self.notificacion.titulo}"
+
+
+class DocumentoInstitucional(models.Model):
+    """Reglamentos, formularios y otros documentos que la federación pone a disposición de los clubes."""
+    TIPO_CHOICES = [
+        ("reglamento", "Reglamento"),
+        ("formulario", "Formulario"),
+        ("circular", "Circular"),
+        ("otro", "Otro"),
+    ]
+
+    titulo = models.CharField(max_length=150)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="otro")
+    archivo = models.FileField(upload_to="institucional/")
+    descripcion = models.CharField(max_length=250, blank=True)
+
+    subido_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="documentos_institucionales")
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_subida"]
+
+    def __str__(self):
+        return self.titulo

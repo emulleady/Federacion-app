@@ -44,6 +44,10 @@
         <label>Cantidad de fechas de suspensión (opcional)</label>
         <input type="number" name="cantidad_fechas" min="1">
       </div>
+      <div>
+        <label>Cantidad de años de suspensión (opcional, en vez de fechas)</label>
+        <input type="number" name="cantidad_anios" min="1">
+      </div>
       <div style="grid-column: span 2;">
         <label>Informe adjunto (opcional)</label>
         <input type="file" name="informe">
@@ -70,7 +74,7 @@
     <td>{{ s.persona }}</td>
     <td>{{ s.club|default:"—" }}</td>
     <td>{{ s.motivo|truncatewords:12 }}</td>
-    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}</td>
+    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}{% if s.cantidad_anios %} · {{ s.cantidad_anios }} año(s){% endif %}</td>
     <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
     <td>{% if s.informe %}<a href="{{ s.informe.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
     <td>

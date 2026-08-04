@@ -1,0 +1,40 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Notificaciones</h2>
+
+{% for fila in filas %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h3 style="margin:0 0 6px;">{{ fila.notificacion.titulo }}</h3>
+      <p style="color:#6b7280; font-size:12px; margin:0;">{{ fila.notificacion.fecha_creacion|date:"d/m/Y H:i" }}</p>
+    </div>
+    {% if fila.acuse.fecha_acuse %}
+      <span class="badge badge-aprobado">✓ Recibo acusado el {{ fila.acuse.fecha_acuse|date:"d/m/Y" }}</span>
+    {% else %}
+      <span class="badge badge-pendiente">Sin acusar recibo</span>
+    {% endif %}
+  </div>
+
+  <p style="margin:12px 0; white-space:pre-line;">{{ fila.notificacion.mensaje }}</p>
+
+  {% if fila.acuse.respuesta %}
+  <div class="mensaje" style="background:#eff6ff; border-left-color:#2563eb; color:#1e40af;">
+    <strong>Tu respuesta ({{ fila.acuse.fecha_respuesta|date:"d/m/Y" }}):</strong> {{ fila.acuse.respuesta }}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'acusar_notificacion' fila.notificacion.id %}" style="margin-top:10px;">
+    {% csrf_token %}
+    {% if not fila.acuse.respuesta %}
+    <textarea name="respuesta" rows="2" placeholder="Responder (opcional)" style="margin-bottom:8px;"></textarea>
+    {% endif %}
+    <button type="submit">
+      {% if fila.acuse.fecha_acuse %}Actualizar{% else %}Acusar recibo{% endif %}
+    </button>
+  </form>
+</div>
+{% empty %}
+<p style="color:#6b7280;">No tenés notificaciones todavía.</p>
+{% endfor %}
+{% endblock %}

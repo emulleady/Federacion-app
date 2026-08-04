@@ -2046,6 +2046,7 @@ def panel_disciplina(request):
             informe=request.FILES.get("informe"),
             fecha_sancion=request.POST.get("fecha_sancion"),
             cantidad_fechas=request.POST.get("cantidad_fechas") or None,
+            cantidad_anios=request.POST.get("cantidad_anios") or None,
             cargada_por=request.user,
         )
         messages.success(request, f"Sanción disciplinaria cargada para {persona}.")
@@ -2069,3 +2070,134 @@ def resolver_sancion_disciplinaria(request, sancion_id):
         sancion.save()
         messages.success(request, f"Sanción de {sancion.persona} marcada como cumplida.")
     return redirect("panel_disciplina")
+
+
+# ---------------------------------------------------------------------
+# NOTIFICACIONES
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def crear_notificacion(request):
+    """La federación redacta un aviso y elige a qué clubes va dirigido (o a todos)."""
+    from .models import Notificacion, NotificacionAcuse
+
+    clubes = Club.objects.all().order_by("nombre")
+
+    if request.method == "POST":
+        titulo = request.POST.get("titulo", "").strip()
+        mensaje = request.POST.get("mensaje", "").strip()
+        club_ids = request.POST.getlist("clubes")
+
+        if not titulo or not mensaje:
+            messages.error(request, "Completá título y mensaje.")
+        else:
+            notificacion = Notificacion.objects.create(titulo=titulo, mensaje=mensaje, creada_por=request.user)
+            if club_ids:
+                notificacion.destinatarios.set(club_ids)
+            messages.success(request, "Notificación enviada.")
+            return redirect("crear_notificacion")
+
+    # Al entrar a esta pantalla, se marcan como vistos todos los acuses
+    # (así el badge del menú se limpia).
+    NotificacionAcuse.objects.filter(
+        fecha_acuse__isnull=False, visto_por_federacion=False
+    ).update(visto_por_federacion=True)
+
+    enviadas = Notificacion.objects.prefetch_related(
+        "destinatarios", "acuses__club", "acuses__acusado_por"
+    ).order_by("-fecha_creacion")[:30]
+
+    enviadas_con_estado = []
+    for n in enviadas:
+        clubes_destino = list(n.destinatarios.all()) or list(clubes)
+        acuses_por_club = {a.club_id: a for a in n.acuses.all()}
+        filas_clubes = []
+        for c in clubes_destino:
+            acuse = acuses_por_club.get(c.id)
+            filas_clubes.append({"club": c, "acuse": acuse})
+        enviadas_con_estado.append({"notificacion": n, "filas_clubes": filas_clubes})
+
+    return render(request, "federacion_app/crear_notificacion.html", {
+        "clubes": clubes, "enviadas": enviadas_con_estado,
+    })
+
+
+@login_required
+@user_passes_test(es_delegado)
+def notificaciones(request):
+    """El delegado ve los avisos dirigidos a su club (o a todos), y se marcan como leídos al entrar."""
+    from .models import Notificacion, NotificacionAcuse
+
+    club = request.user.club
+    todas = Notificacion.objects.prefetch_related("destinatarios").order_by("-fecha_creacion")
+    propias = [n for n in todas if n.es_para(club)]
+
+    # Al entrar a esta pantalla, se marcan todas como leídas por este usuario.
+    for n in propias:
+        n.leida_por.add(request.user)
+
+    # Trae (o prepara vacío) el acuse de cada notificación para este club.
+    filas = []
+    for n in propias:
+        acuse, _ = NotificacionAcuse.objects.get_or_create(notificacion=n, club=club)
+        filas.append({"notificacion": n, "acuse": acuse})
+
+    return render(request, "federacion_app/notificaciones.html", {"filas": filas})
+
+
+@login_required
+@user_passes_test(es_delegado)
+def acusar_notificacion(request, notificacion_id):
+    """El delegado acusa recibo de una notificación y, opcionalmente, responde."""
+    from .models import Notificacion, NotificacionAcuse
+
+    notificacion = get_object_or_404(Notificacion, id=notificacion_id)
+    acuse, _ = NotificacionAcuse.objects.get_or_create(notificacion=notificacion, club=request.user.club)
+
+    if request.method == "POST":
+        if not acuse.fecha_acuse:
+            acuse.acusado_por = request.user
+            acuse.fecha_acuse = date.today()
+
+        respuesta = request.POST.get("respuesta", "").strip()
+        if respuesta:
+            acuse.respuesta = respuesta
+            acuse.fecha_respuesta = date.today()
+
+        acuse.save()
+        messages.success(request, "Acuse de recibo registrado.")
+
+    return redirect("notificaciones")
+
+
+# ---------------------------------------------------------------------
+# INSTITUCIONAL
+# ---------------------------------------------------------------------
+
+@login_required
+def institucional(request):
+    """
+    Reglamentos, formularios y circulares. Cualquier usuario logueado
+    puede ver y descargar; solo la federación puede subir o borrar.
+    """
+    from .models import DocumentoInstitucional
+
+    if request.method == "POST" and es_federacion(request.user):
+        accion = request.POST.get("accion")
+        if accion == "subir" and request.FILES.get("archivo"):
+            DocumentoInstitucional.objects.create(
+                titulo=request.POST.get("titulo", "").strip() or request.FILES["archivo"].name,
+                tipo=request.POST.get("tipo", "otro"),
+                archivo=request.FILES["archivo"],
+                descripcion=request.POST.get("descripcion", ""),
+                subido_por=request.user,
+            )
+            messages.success(request, "Documento subido.")
+        elif accion == "borrar":
+            DocumentoInstitucional.objects.filter(id=request.POST.get("documento_id")).delete()
+            messages.info(request, "Documento eliminado.")
+        return redirect("institucional")
+
+    documentos = DocumentoInstitucional.objects.all()
+    return render(request, "federacion_app/institucional.html", {"documentos": documentos})

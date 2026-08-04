@@ -113,7 +113,7 @@
   {% for s in sanciones_disciplinarias %}
   <tr>
     <td>{{ s.motivo|truncatewords:15 }}</td>
-    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}</td>
+    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}{% if s.cantidad_anios %} · {{ s.cantidad_anios }} año(s){% endif %}</td>
     <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
     <td>{% if s.informe %}<a href="{{ s.informe.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
   </tr>
