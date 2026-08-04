@@ -917,6 +917,21 @@ def cobrar_inscripcion(request, inscripcion_id):
     })
 
 
+def _ids_jugadores_sancionados(club):
+    """
+    IDs de jugadores del club que hoy no pueden jugar: sanción por
+    tarjetas todavía pendiente de resolver, o sanción disciplinaria activa.
+    """
+    from .models import SancionTarjeta, SancionDisciplinaria
+    ids_tarjetas = set(
+        SancionTarjeta.objects.filter(club=club, estado="pendiente").values_list("persona_id", flat=True)
+    )
+    ids_disciplinarias = set(
+        SancionDisciplinaria.objects.filter(club=club, estado="activa").values_list("persona_id", flat=True)
+    )
+    return ids_tarjetas | ids_disciplinarias
+
+
 @login_required
 @user_passes_test(es_delegado)
 def planilla_partido(request):
@@ -931,11 +946,18 @@ def planilla_partido(request):
     ).distinct().order_by("apellido")
     categorias = Categoria.objects.all().order_by("nombre")
 
+    ids_sancionados = _ids_jugadores_sancionados(club)
+
     # Categoría de cada jugador, para el filtro del lado del cliente
     # (no recarga la página, así no se pierden los tildados al cambiar filtro).
+    # Los sancionados no entran a la lista seleccionable.
     jugadores_con_categoria = []
+    jugadores_sancionados = []
     for p in jugadores_club:
         vinculo = p.vinculos.filter(club=club, fecha_fin__isnull=True).first()
+        if p.id in ids_sancionados:
+            jugadores_sancionados.append(p)
+            continue
         jugadores_con_categoria.append({
             "persona": p,
             "categoria_id": vinculo.categoria_id if vinculo and vinculo.categoria_id else "",
@@ -946,6 +968,7 @@ def planilla_partido(request):
 
     return render(request, "federacion_app/planilla_partido.html", {
         "jugadores": jugadores_con_categoria, "categorias": categorias, "club": club,
+        "jugadores_sancionados": jugadores_sancionados,
     })
 
 
@@ -999,6 +1022,8 @@ def _generar_pdf_planilla(request, club):
     # --- Plantel: hasta 15 jugadores tildados por el delegado + DT/AT/PF ---
     filas = [["", "APELLIDO Y NOMBRE", "CARNET/DNI", "N° CAMISETA"]]
     ids_seleccionados = request.POST.getlist("jugadores")
+    ids_sancionados = _ids_jugadores_sancionados(club)
+    ids_seleccionados = [pid for pid in ids_seleccionados if int(pid) not in ids_sancionados]
     seleccionados = list(Persona.objects.filter(id__in=ids_seleccionados))
     # Mantiene el orden en que vinieron tildados en el formulario
     orden = {int(pid): i for i, pid in enumerate(ids_seleccionados)}

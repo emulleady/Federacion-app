@@ -16,6 +16,15 @@
       <div><label>Hora de entrega</label><input type="time" name="hora_entrega"></div>
     </div>
 
+    {% if jugadores_sancionados %}
+    <div class="mensaje" style="background:#fef2f2; border-left-color:#dc2626; color:#991b1b;">
+      ⚠️ No pueden jugar por tener una sanción activa:
+      {% for p in jugadores_sancionados %}
+        <a href="{% url 'ficha_persona' p.id %}" target="_blank" style="color:#991b1b; text-decoration:underline;">{{ p }}</a>{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <h3>Plantel</h3>
     <div style="margin-bottom:10px; max-width:280px;">
       <label>Filtrar por categoría (no borra lo ya tildado)</label>
