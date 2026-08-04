@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Usuario, Club, Categoria, Persona, DocumentoPersona,
     Vinculo, SolicitudPase, DocumentoSolicitud, LogAuditoria,
-    Torneo, InscripcionTorneo,
+    Torneo, InscripcionTorneo, PresentacionFormulario12,
+    Tarjeta, SancionTarjeta, SancionDisciplinaria,
 )
 
 
@@ -89,3 +90,31 @@ class InscripcionTorneoAdmin(admin.ModelAdmin):
     list_display = ("persona", "club", "torneo", "estado", "monto_total", "pagado")
     list_filter = ("estado", "pagado", "torneo")
     search_fields = ("persona__apellido", "persona__documento")
+
+
+@admin.register(PresentacionFormulario12)
+class PresentacionFormulario12Admin(admin.ModelAdmin):
+    list_display = ("club", "torneo", "categoria", "estado", "fecha_creacion", "aprobado_por")
+    list_filter = ("estado", "torneo", "categoria")
+    search_fields = ("club__nombre",)
+
+
+@admin.register(Tarjeta)
+class TarjetaAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "tipo", "fecha_partido", "torneo")
+    list_filter = ("tipo", "torneo")
+    search_fields = ("persona__apellido", "persona__documento")
+
+
+@admin.register(SancionTarjeta)
+class SancionTarjetaAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "tipo_tarjeta", "numero_ocurrencia", "monto", "estado")
+    list_filter = ("estado", "tipo_tarjeta")
+    search_fields = ("persona__apellido", "persona__documento")
+
+
+@admin.register(SancionDisciplinaria)
+class SancionDisciplinariaAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "fecha_sancion", "estado", "cargada_por")
+    list_filter = ("estado",)
+    search_fields = ("persona__apellido", "persona__documento", "motivo")

@@ -1,0 +1,38 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Sanciones pendientes</h2>
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Club</th>
+    <th>Tarjeta</th>
+    <th>Monto</th>
+    <th>Comprobante</th>
+    <th></th>
+  </tr>
+  {% for s in sanciones %}
+  <tr>
+    <td><a href="{% url 'ficha_persona' s.persona.id %}">{{ s.persona }}</a></td>
+    <td>{{ s.club.nombre }}</td>
+    <td>{{ s.get_tipo_tarjeta_display }} — {{ s.numero_ocurrencia }}° vez</td>
+    <td>${{ s.monto }}</td>
+    <td>
+      {% if s.comprobante_pago %}
+        <a href="{{ s.comprobante_pago.url }}" target="_blank">Ver comprobante</a>
+      {% else %}
+        <span class="badge badge-pendiente">Sin subir</span>
+      {% endif %}
+    </td>
+    <td>
+      <form method="post" action="{% url 'resolver_sancion' s.id %}" style="display:flex; gap:6px;">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="pagado" {% if not s.comprobante_pago %}disabled title="Todavía no subieron el comprobante"{% endif %}>Marcar pagado</button>
+        <button type="submit" name="accion" value="cumplido">Marcar fecha cumplida</button>
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">No hay sanciones pendientes.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Tarjetas de {{ request.user.club }}</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'mis_sanciones' %}">Ver mis sanciones</a></p>
+
+<h3>Resumen por jugador</h3>
+<table style="margin-bottom:24px;">
+  <tr>
+    <th>Jugador</th>
+    <th>Amarillas</th>
+    <th>Faltan para próxima sanción</th>
+    <th>Azules indirectas</th>
+    <th>Faltan para próxima sanción</th>
+    <th>Azules directas</th>
+  </tr>
+  {% for r in resumen %}
+  <tr>
+    <td><a href="{% url 'ficha_persona' r.persona.id %}">{{ r.persona }}</a></td>
+    <td>{{ r.amarillas }}</td>
+    <td>{{ r.faltan_amarilla }}</td>
+    <td>{{ r.azules_indirectas }}</td>
+    <td>{{ r.faltan_indirecta }}</td>
+    <td>{{ r.azules_directas }}{% if r.azules_directas %} <span style="color:#6b7280; font-size:12px;">(cada una sanciona)</span>{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">Todavía no hay tarjetas cargadas para tu club.</td></tr>
+  {% endfor %}
+</table>
+
+<h3>Detalle de todas las tarjetas</h3>
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Tipo</th>
+    <th>Fecha del partido</th>
+    <th>Torneo</th>
+  </tr>
+  {% for t in tarjetas %}
+  <tr>
+    <td>{{ t.persona }}</td>
+    <td>{{ t.get_tipo_display }}</td>
+    <td>{{ t.fecha_partido|date:"d/m/Y" }}</td>
+    <td>{{ t.torneo|default:"—" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">Todavía no hay tarjetas cargadas.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

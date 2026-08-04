@@ -1,0 +1,75 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Presentaciones Formulario 12 — pendientes de aprobación</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'historial_presentaciones_formulario12' %}">Ver historial (aprobadas / rechazadas)</a></p>
+
+<div class="card">
+  <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:180px;">
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for t in torneos %}<option value="{{ t.id }}" {% if torneo_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:180px;">
+      <label>Club</label>
+      <select name="club" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for c in clubes %}<option value="{{ c.id }}" {% if club_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:180px;">
+      <label>Categoría</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for cat in categorias %}<option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% for fila in filas %}
+{% with p=fila.presentacion %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3 style="margin:0 0 6px;">{{ p.club.nombre }} — {{ p.torneo }} — {{ p.categoria|default:"—" }}</h3>
+      <p style="color:#6b7280; font-size:13px; margin:0;">
+        {{ p.jugadores.count }} jugador(es), {{ p.tecnicos.count }} cuerpo técnico ·
+        presentado el {{ p.fecha_creacion|date:"d/m/Y" }}
+      </p>
+    </div>
+    {% if p.archivo_firmado %}
+      <a href="{{ p.archivo_firmado.url }}" target="_blank">📄 Ver formulario firmado</a>
+    {% else %}
+      <span class="badge badge-pendiente">Sin firmar todavía</span>
+    {% endif %}
+  </div>
+
+  {% if fila.menores_sin_autorizacion %}
+  <div class="mensaje" style="background:#fef2f2; border-left-color:#dc2626; color:#991b1b; margin-top:12px;">
+    ⚠️ Falta el Formulario 08 firmado de:
+    {% for m in fila.menores_sin_autorizacion %}
+      <a href="{% url 'ficha_persona' m.id %}" target="_blank" style="color:#991b1b; text-decoration:underline;">{{ m }}</a>{% if not forloop.last %}, {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'resolver_presentacion_formulario12' p.id %}" style="margin-top:14px;">
+    {% csrf_token %}
+    <button type="submit" name="accion" value="aprobar"
+      {% if not p.archivo_firmado or fila.menores_sin_autorizacion %}
+        disabled title="{% if not p.archivo_firmado %}Todavía no subieron el formulario firmado{% else %}Falta el Formulario 08 de algún menor{% endif %}"
+      {% endif %}>
+      Aprobar y sellar
+    </button>
+    <button type="submit" name="accion" value="rechazar">Rechazar</button>
+    <input type="text" name="motivo_rechazo" placeholder="Motivo (si rechazás)" style="width:260px; display:inline-block; margin-left:8px;">
+  </form>
+</div>
+{% endwith %}
+{% empty %}
+<p style="color:#6b7280;">No hay presentaciones pendientes para este filtro.</p>
+{% endfor %}
+{% endblock %}

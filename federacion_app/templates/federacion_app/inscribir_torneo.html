@@ -2,6 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>Inscribir jugadores a torneo</h2>
+  <p style="margin-bottom:16px;"><a href="{% url 'mis_inscripciones_torneo' %}">Ver mis inscripciones</a></p>
 
   <form method="get" style="margin-bottom:20px;">
     <label>Filtrar por categoría (opcional)</label>
@@ -45,24 +46,4 @@
     <button type="submit" style="margin-top:16px;">Inscribir seleccionados</button>
   </form>
 </div>
-
-<h3>Mis inscripciones</h3>
-<table>
-  <tr>
-    <th>Jugador</th>
-    <th>Torneo</th>
-    <th>Estado</th>
-    <th>Monto</th>
-  </tr>
-  {% for i in inscripciones %}
-  <tr>
-    <td>{{ i.persona }}</td>
-    <td>{{ i.torneo }}</td>
-    <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
-    <td>{% if i.estado == "cobrado" %}${{ i.monto_total }}{% else %}—{% endif %}</td>
-  </tr>
-  {% empty %}
-  <tr><td colspan="4">Todavía no inscribiste a nadie.</td></tr>
-  {% endfor %}
-</table>
 {% endblock %}

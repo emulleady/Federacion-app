@@ -1,0 +1,89 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Consejo de Disciplina</h2>
+
+<div class="card">
+  <h3>Buscar jugador</h3>
+  <form method="get" style="display:flex; gap:10px;">
+    <input type="text" name="q" value="{{ query }}" placeholder="Documento o apellido" style="flex:1;">
+    <button type="submit">Buscar</button>
+  </form>
+
+  {% if resultados %}
+  <table style="margin-top:14px;">
+    <tr><th>Jugador</th><th>Documento</th><th></th></tr>
+    {% for p in resultados %}
+    <tr>
+      <td>{{ p.apellido }}, {{ p.nombre }}</td>
+      <td>{{ p.documento }}</td>
+      <td><a href="?q={{ query }}&persona={{ p.id }}">Elegir</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% elif query %}
+  <p style="color:#6b7280; margin-top:10px;">Sin resultados.</p>
+  {% endif %}
+</div>
+
+{% if persona_elegida %}
+<div class="card">
+  <h3>Cargar sanción — {{ persona_elegida }}</h3>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="persona" value="{{ persona_elegida.id }}">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div style="grid-column: span 2;">
+        <label>Motivo</label>
+        <textarea name="motivo" rows="3" required></textarea>
+      </div>
+      <div>
+        <label>Fecha de la sanción</label>
+        <input type="date" name="fecha_sancion" required>
+      </div>
+      <div>
+        <label>Cantidad de fechas de suspensión (opcional)</label>
+        <input type="number" name="cantidad_fechas" min="1">
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Informe adjunto (opcional)</label>
+        <input type="file" name="informe">
+      </div>
+    </div>
+    <button type="submit" style="margin-top:14px;">Cargar sanción</button>
+  </form>
+</div>
+{% endif %}
+
+<h3>Últimas sanciones cargadas</h3>
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Club</th>
+    <th>Motivo</th>
+    <th>Fecha</th>
+    <th>Estado</th>
+    <th>Informe</th>
+    <th></th>
+  </tr>
+  {% for s in sanciones %}
+  <tr>
+    <td>{{ s.persona }}</td>
+    <td>{{ s.club|default:"—" }}</td>
+    <td>{{ s.motivo|truncatewords:12 }}</td>
+    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}</td>
+    <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+    <td>{% if s.informe %}<a href="{{ s.informe.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
+    <td>
+      {% if s.estado == "activa" %}
+      <form method="post" action="{% url 'resolver_sancion_disciplinaria' s.id %}">
+        {% csrf_token %}
+        <button type="submit" style="padding:5px 10px; font-size:12px;">Marcar cumplida</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7">Todavía no hay sanciones cargadas.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

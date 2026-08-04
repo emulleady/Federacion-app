@@ -26,6 +26,7 @@ class Usuario(AbstractUser):
     ROL_CHOICES = [
         ("delegado", "Delegado de club"),
         ("federacion", "Administrador de federación"),
+        ("consejo_disciplina", "Consejo de disciplina"),
     ]
     rol = models.CharField(max_length=20, choices=ROL_CHOICES)
     club = models.ForeignKey(
@@ -124,6 +125,7 @@ class DocumentoPersona(models.Model):
         ("dni", "DNI"),
         ("certificado_medico", "Certificado médico"),
         ("foto_carnet", "Foto carnet"),
+        ("autorizacion_fichaje", "Autorización de fichaje firmada (Form. 08)"),
         ("otro", "Otro"),
     ]
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="documentos")
@@ -294,6 +296,43 @@ class Torneo(models.Model):
         return f"{self.nombre} ({self.temporada})"
 
 
+class PresentacionFormulario12(models.Model):
+    """
+    Una presentación del Formulario 12 por club/torneo/categoría. El
+    delegado la genera y sube el papel firmado; la federación la revisa
+    y recién con su aprobación los jugadores quedan activos en el torneo.
+    """
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente de firma/aprobación"),
+        ("aprobado", "Aprobado"),
+        ("rechazado", "Rechazado"),
+    ]
+
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="presentaciones_formulario12")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, related_name="presentaciones_formulario12")
+    categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, null=True, blank=True)
+
+    jugadores = models.ManyToManyField(Persona, related_name="presentaciones_como_jugador", blank=True)
+    tecnicos = models.ManyToManyField(Persona, related_name="presentaciones_como_tecnico", blank=True)
+
+    archivo_firmado = models.FileField(upload_to="formularios12_firmados/", null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    motivo_rechazo = models.TextField(blank=True)
+
+    creado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="presentaciones_creadas")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    aprobado_por = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name="presentaciones_aprobadas"
+    )
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"Form. 12 — {self.club} — {self.torneo} — {self.categoria}"
+
+
 class InscripcionTorneo(models.Model):
     """
     Inscripción de un jugador a un torneo puntual. Aunque el jugador ya
@@ -348,3 +387,101 @@ class LogAuditoria(models.Model):
 
     class Meta:
         ordering = ["-fecha"]
+
+
+# ---------------------------------------------------------------------
+# TARJETAS Y SANCIONES
+# ---------------------------------------------------------------------
+
+class Tarjeta(models.Model):
+    """Una tarjeta individual cargada por la federación después de un partido."""
+    TIPO_CHOICES = [
+        ("amarilla", "Amarilla"),
+        ("azul_indirecta", "Azul indirecta"),
+        ("azul_directa", "Azul directa"),
+    ]
+
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="tarjetas")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="tarjetas")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, null=True, blank=True, related_name="tarjetas")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    fecha_partido = models.DateField()
+    observacion = models.CharField(max_length=200, blank=True)
+
+    cargada_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="tarjetas_cargadas")
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_partido"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} — {self.persona} ({self.fecha_partido})"
+
+
+class SancionTarjeta(models.Model):
+    """
+    Se genera automáticamente al llegar a un umbral (4ta amarilla, 2da
+    azul indirecta, o cualquier azul directa). El club paga (sube el
+    comprobante) o cumple la fecha; la federación resuelve.
+    """
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente"),
+        ("pagado", "Pagado"),
+        ("cumplido", "Fecha cumplida"),
+    ]
+
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="sanciones")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="sanciones")
+    tipo_tarjeta = models.CharField(max_length=20, choices=Tarjeta.TIPO_CHOICES)
+    numero_ocurrencia = models.PositiveSmallIntegerField(help_text="1ra, 2da, 3ra... vez que se llega a este umbral")
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    comprobante_pago = models.FileField(upload_to="comprobantes_sanciones/", null=True, blank=True)
+
+    fecha_generada = models.DateTimeField(auto_now_add=True)
+    fecha_resolucion = models.DateTimeField(null=True, blank=True)
+    resuelto_por = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name="sanciones_resueltas"
+    )
+
+    class Meta:
+        ordering = ["-fecha_generada"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["persona", "tipo_tarjeta", "numero_ocurrencia"],
+                name="unica_sancion_por_umbral",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.persona} — {self.get_tipo_tarjeta_display()} #{self.numero_ocurrencia}"
+
+
+class SancionDisciplinaria(models.Model):
+    """
+    Sanción importante cargada por el Consejo de Disciplina — distinta
+    de las sanciones automáticas por acumulación de tarjetas. Va con un
+    informe adjunto que respalda la decisión.
+    """
+    ESTADO_CHOICES = [
+        ("activa", "Activa"),
+        ("cumplida", "Cumplida"),
+    ]
+
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="sanciones_disciplinarias")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, null=True, blank=True, related_name="sanciones_disciplinarias")
+    motivo = models.TextField()
+    informe = models.FileField(upload_to="informes_disciplina/", null=True, blank=True)
+    fecha_sancion = models.DateField()
+    cantidad_fechas = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Cantidad de fechas de suspensión, si corresponde")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="activa")
+
+    cargada_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="sanciones_disciplinarias_cargadas")
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_sancion"]
+
+    def __str__(self):
+        return f"{self.persona} — {self.motivo[:40]}"

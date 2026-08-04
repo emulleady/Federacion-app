@@ -12,6 +12,12 @@
   <p><strong>Nota del club de origen:</strong> {{ solicitud.nota_liberacion }}</p>
   {% endif %}
 
+  {% if solicitud.tipo == "pase" %}
+  <p><a href="{% url 'formulario_09' solicitud.id %}" target="_blank">📄 Descargar Formulario 09 (Pase entre clubes)</a></p>
+  {% elif solicitud.tipo == "alta_nueva" %}
+  <p><a href="{% url 'formulario_10' solicitud.id %}" target="_blank">📄 Descargar Formulario 10 (Inscripción jugador libre/nuevo)</a></p>
+  {% endif %}
+
   <h3>Documentación adjunta</h3>
   <ul>
     {% for doc in solicitud.documentos.all %}

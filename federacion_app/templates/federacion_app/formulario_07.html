@@ -1,0 +1,31 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Formulario 07 — Designación de delegados deportivos</h2>
+  <p style="color:#6b7280; margin-top:-10px;">Cargá hasta 4 delegados de {{ club.nombre }}. Los campos que dejes vacíos quedan en blanco en el PDF para completar a mano.</p>
+
+  <form method="post" target="_blank">
+    {% csrf_token %}
+    <div style="max-width:300px; margin-bottom:20px;">
+      <label>Temporada</label>
+      <input type="text" name="temporada" placeholder="Ej: 2026">
+    </div>
+
+    {% for i in "1234" %}
+    <div class="card" style="background:#f9fafb; box-shadow:none; border:1px solid #e5e7eb;">
+      <h3>{{ forloop.counter }}° Delegado deportivo{% if forloop.counter > 1 %} (opcional){% endif %}</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div><label>Nombre y apellido</label><input type="text" name="nombre_{{ forloop.counter }}"></div>
+        <div><label>DNI</label><input type="text" name="dni_{{ forloop.counter }}"></div>
+        <div><label>Fecha de nacimiento</label><input type="date" name="fecha_nac_{{ forloop.counter }}"></div>
+        <div><label>Localidad</label><input type="text" name="localidad_{{ forloop.counter }}"></div>
+        <div style="grid-column: span 2;"><label>Domicilio</label><input type="text" name="domicilio_{{ forloop.counter }}"></div>
+        <div><label>Teléfono / Celular</label><input type="text" name="telefono_{{ forloop.counter }}"></div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <button type="submit" style="margin-top:10px;">Generar Formulario 07 (PDF)</button>
+  </form>
+</div>
+{% endblock %}

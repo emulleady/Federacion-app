@@ -17,6 +17,15 @@
     </div>
 
     <h3>Plantel</h3>
+    <div style="margin-bottom:10px; max-width:280px;">
+      <label>Filtrar por categoría (no borra lo ya tildado)</label>
+      <select id="filtro-categoria" onchange="filtrarCategoria()">
+        <option value="">Todas las categorías</option>
+        {% for cat in categorias %}
+          <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <table style="margin-bottom:16px;">
       <tr>
         <th style="width:36px;"></th>
@@ -24,12 +33,12 @@
         <th>Carnet/DNI</th>
         <th style="width:120px;">N° Camiseta</th>
       </tr>
-      {% for p in jugadores %}
-      <tr>
-        <td><input type="checkbox" name="jugadores" value="{{ p.id }}"></td>
-        <td>{{ p.apellido }}, {{ p.nombre }}</td>
-        <td>{{ p.numero_carnet|default:p.documento }}</td>
-        <td><input type="text" name="camiseta_{{ p.id }}" style="width:80px;"></td>
+      {% for item in jugadores %}
+      <tr data-categoria="{{ item.categoria_id }}">
+        <td><input type="checkbox" name="jugadores" value="{{ item.persona.id }}"></td>
+        <td>{{ item.persona.apellido }}, {{ item.persona.nombre }}</td>
+        <td>{{ item.persona.numero_carnet|default:item.persona.documento }}</td>
+        <td><input type="text" name="camiseta_{{ item.persona.id }}" style="width:80px;"></td>
       </tr>
       {% empty %}
       <tr><td colspan="4">No hay jugadores cargados en tu club todavía.</td></tr>
@@ -53,4 +62,14 @@
     <button type="submit">Generar planilla PDF</button>
   </form>
 </div>
+
+<script>
+  function filtrarCategoria() {
+    const valor = document.getElementById('filtro-categoria').value;
+    document.querySelectorAll('tr[data-categoria]').forEach(function (fila) {
+      const coincide = !valor || fila.dataset.categoria === valor;
+      fila.style.display = coincide ? '' : 'none';
+    });
+  }
+</script>
 {% endblock %}

@@ -16,7 +16,12 @@
     <td>{{ s.get_tipo_display }}</td>
     <td>{{ s.club_origen|default:"—" }}</td>
     <td>{{ s.club_destino }}</td>
-    <td><span class="badge badge-{{ s.estado|slice:':10' }}">{{ s.get_estado_display }}</span></td>
+    <td>
+      <span class="badge badge-{{ s.estado|slice:':10' }}">{{ s.get_estado_display }}</span>
+      {% if s.estado == "rechazado" and s.motivo_rechazo %}
+        <div style="font-size:12px; color:#991b1b; margin-top:4px;">{{ s.motivo_rechazo }}</div>
+      {% endif %}
+    </td>
     <td>{{ s.fecha_resolucion|date:"d/m/Y"|default:s.fecha_creacion|date:"d/m/Y" }}</td>
   </tr>
   {% empty %}

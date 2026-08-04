@@ -2,6 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>Formulario 12 — Inscripción por categoría</h2>
+  <p style="margin-bottom:16px;"><a href="{% url 'mis_presentaciones_formulario12' %}">Ver estado de mis presentaciones</a></p>
   <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
     <div style="flex:1; min-width:200px;">
       <label>Torneo</label>
@@ -42,11 +43,28 @@
   </form>
 </div>
 
-<form method="post" target="_blank">
+<form method="post" id="form-formulario-12">
   {% csrf_token %}
   <input type="hidden" name="accion" value="generar">
   <input type="hidden" name="torneo" value="{{ torneo_id }}">
   <input type="hidden" name="categoria" value="{{ categoria.id }}">
+
+  <div id="confirmacion-generado" class="mensaje" style="display:none;">
+    ✅ Formulario generado. Los jugadores tildados quedaron inscriptos al torneo. Si el PDF no se abrió solo, <a href="#" id="link-reabrir">hacé click acá para abrirlo</a>.
+  </div>
+
+  {% if not torneo_id %}
+  <div class="mensaje" style="background:#fffbeb; border-left-color:#f59e0b; color:#92400e;">
+    Elegí un torneo arriba para que el sistema te avise si algún jugador ya estaba cargado.
+  </div>
+  {% elif ya_cargados_jugadores or ya_cargados_tecnicos %}
+  <div class="mensaje">
+    Ya estaban cargados para este torneo (no hace falta volver a tildarlos):
+    {% for p in ya_cargados_jugadores %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    {% if ya_cargados_jugadores and ya_cargados_tecnicos %} · {% endif %}
+    {% for p in ya_cargados_tecnicos %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}
+  </div>
+  {% endif %}
 
   <h3>Jugadores — {{ categoria.nombre }}</h3>
   <table style="margin-bottom:20px;">
@@ -58,7 +76,7 @@
       <td>{{ p.numero_carnet|default:p.documento }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="3">No hay jugadores cargados en esta categoría todavía.</td></tr>
+    <tr><td colspan="3">{% if ya_cargados_jugadores %}Todos los jugadores de esta categoría ya están cargados para este torneo.{% else %}No hay jugadores cargados en esta categoría todavía.{% endif %}</td></tr>
     {% endfor %}
   </table>
 
@@ -81,7 +99,33 @@
     Se van a generar tantos "Formulario N°12" como hagan falta, de a 20 personas por hoja.
     Los jugadores tildados quedan sumados al padrón activo de este torneo.
   </p>
-  <button type="submit">Generar Formulario 12 (PDF)</button>
+  <button type="submit" id="btn-generar">Generar Formulario 12 (PDF)</button>
 </form>
+
+<script>
+  document.getElementById('form-formulario-12').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const boton = document.getElementById('btn-generar');
+    const confirmacion = document.getElementById('confirmacion-generado');
+    boton.disabled = true;
+    boton.textContent = 'Generando...';
+
+    try {
+      const respuesta = await fetch(window.location.href, { method: 'POST', body: new FormData(this) });
+      if (!respuesta.ok) throw new Error('Error del servidor');
+      const blob = await respuesta.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      document.getElementById('link-reabrir').href = url;
+      confirmacion.style.display = 'block';
+      confirmacion.scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      alert('Hubo un problema al generar el formulario. Probá de nuevo.');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Generar Formulario 12 (PDF)';
+    }
+  });
+</script>
 {% endif %}
 {% endblock %}

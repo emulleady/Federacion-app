@@ -1,0 +1,24 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Mis inscripciones a torneos</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'inscribir_torneo' %}">← Volver a inscribir</a></p>
+
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Torneo</th>
+    <th>Estado</th>
+    <th>Monto</th>
+  </tr>
+  {% for i in inscripciones %}
+  <tr>
+    <td>{{ i.persona }}</td>
+    <td>{{ i.torneo }}</td>
+    <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
+    <td>{% if i.estado == "cobrado" %}${{ i.monto_total }}{% else %}—{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">Todavía no inscribiste a nadie.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

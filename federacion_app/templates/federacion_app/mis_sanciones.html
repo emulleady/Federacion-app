@@ -1,0 +1,60 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Sanciones de {{ request.user.club }}</h2>
+<p style="color:#6b7280; font-size:13px;">Subí el comprobante de pago antes del próximo partido, o esperá a que la federación marque la fecha como cumplida.</p>
+
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Tarjeta</th>
+    <th>Monto</th>
+    <th>Estado</th>
+    <th>Comprobante</th>
+  </tr>
+  {% for s in sanciones %}
+  <tr>
+    <td>{{ s.persona }}</td>
+    <td>{{ s.get_tipo_tarjeta_display }} — {{ s.numero_ocurrencia }}° vez</td>
+    <td>${{ s.monto }}</td>
+    <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+    <td>
+      {% if s.comprobante_pago %}
+        <a href="{{ s.comprobante_pago.url }}" target="_blank">Ver</a>
+      {% elif s.estado == "pendiente" %}
+        <form method="post" action="{% url 'subir_comprobante_sancion' s.id %}" enctype="multipart/form-data" style="display:flex; gap:6px; align-items:center;">
+          {% csrf_token %}
+          <input type="file" name="archivo" required style="font-size:12px; width:130px;">
+          <button type="submit" style="padding:5px 10px; font-size:12px;">Subir</button>
+        </form>
+      {% else %}
+        —
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No hay sanciones por tarjetas registradas.</td></tr>
+  {% endfor %}
+</table>
+
+<h3 style="margin-top:24px;">Sanciones disciplinarias (Consejo de Disciplina)</h3>
+<table>
+  <tr>
+    <th>Jugador</th>
+    <th>Motivo</th>
+    <th>Fecha</th>
+    <th>Estado</th>
+    <th>Informe</th>
+  </tr>
+  {% for s in sanciones_disciplinarias %}
+  <tr>
+    <td>{{ s.persona }}</td>
+    <td>{{ s.motivo|truncatewords:15 }}</td>
+    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}</td>
+    <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+    <td>{% if s.informe %}<a href="{{ s.informe.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No hay sanciones disciplinarias registradas.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

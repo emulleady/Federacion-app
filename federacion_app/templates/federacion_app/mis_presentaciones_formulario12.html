@@ -1,0 +1,45 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Mis presentaciones — Formulario 12</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'formulario_12' %}">← Volver a Formulario 12</a></p>
+
+<table>
+  <tr>
+    <th>Torneo</th>
+    <th>Categoría</th>
+    <th>Jugadores</th>
+    <th>Cuerpo técnico</th>
+    <th>Estado</th>
+    <th>Firmado</th>
+  </tr>
+  {% for p in presentaciones %}
+  <tr>
+    <td>{{ p.torneo }}</td>
+    <td>{{ p.categoria|default:"—" }}</td>
+    <td>{{ p.jugadores.count }}</td>
+    <td>{{ p.tecnicos.count }}</td>
+    <td>
+      <span class="badge badge-{{ p.estado }}">{{ p.get_estado_display }}</span>
+      {% if p.estado == "rechazado" and p.motivo_rechazo %}
+        <div style="font-size:12px; color:#991b1b; margin-top:4px;">{{ p.motivo_rechazo }}</div>
+      {% endif %}
+    </td>
+    <td>
+      {% if p.archivo_firmado %}
+        <a href="{{ p.archivo_firmado.url }}" target="_blank">Ver archivo</a>
+      {% elif p.estado == "pendiente" %}
+        <form method="post" action="{% url 'subir_formulario12_firmado' p.id %}" enctype="multipart/form-data" style="display:flex; gap:6px; align-items:center;">
+          {% csrf_token %}
+          <input type="file" name="archivo" required style="font-size:12px; width:140px;">
+          <button type="submit" style="padding:5px 10px; font-size:12px;">Subir</button>
+        </form>
+      {% else %}
+        —
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">Todavía no presentaste ningún Formulario 12.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

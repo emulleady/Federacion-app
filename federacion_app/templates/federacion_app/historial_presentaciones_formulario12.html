@@ -1,0 +1,63 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Historial — Presentaciones Formulario 12</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'presentaciones_formulario12' %}">← Volver a pendientes</a></p>
+
+<div class="card">
+  <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:180px;">
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for t in torneos %}<option value="{{ t.id }}" {% if torneo_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:180px;">
+      <label>Club</label>
+      <select name="club" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for c in clubes %}<option value="{{ c.id }}" {% if club_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:180px;">
+      <label>Categoría</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for cat in categorias %}<option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+<table>
+  <tr>
+    <th>Club</th>
+    <th>Torneo</th>
+    <th>Categoría</th>
+    <th>Jugadores</th>
+    <th>Cuerpo técnico</th>
+    <th>Estado</th>
+    <th>Resuelto</th>
+    <th>Formulario</th>
+  </tr>
+  {% for p in presentaciones %}
+  <tr>
+    <td>{{ p.club.nombre }}</td>
+    <td>{{ p.torneo }}</td>
+    <td>{{ p.categoria|default:"—" }}</td>
+    <td>{{ p.jugadores.count }}</td>
+    <td>{{ p.tecnicos.count }}</td>
+    <td>
+      <span class="badge badge-{{ p.estado }}">{{ p.get_estado_display }}</span>
+      {% if p.estado == "rechazado" and p.motivo_rechazo %}
+        <div style="font-size:12px; color:#991b1b; margin-top:4px;">{{ p.motivo_rechazo }}</div>
+      {% endif %}
+    </td>
+    <td>{{ p.fecha_aprobacion|date:"d/m/Y" }}{% if p.aprobado_por %} · {{ p.aprobado_por.username }}{% endif %}</td>
+    <td>{% if p.archivo_firmado %}<a href="{{ p.archivo_firmado.url }}" target="_blank">Ver PDF</a>{% else %}—{% endif %}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="8">Todavía no hay presentaciones resueltas para este filtro.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -23,6 +23,11 @@ class SolicitudPaseForm(forms.ModelForm):
     numero_carnet = forms.CharField(label="Número de carnet (si ya lo tiene)", max_length=30, required=False)
     requiere_carnet = forms.BooleanField(label="¿Necesita tramitar el carnet?", required=False)
     archivo_documentacion = forms.FileField(label="Documentación (DNI, certificado médico)", required=False)
+    formulario_10_firmado = forms.FileField(
+        label="Formulario 10 firmado (habilitación de jugador libre/nuevo, si ya lo tenés)",
+        required=False,
+        help_text="Opcional al cargar la solicitud — también lo podés subir después desde 'Revisar solicitud'.",
+    )
 
     class Meta:
         model = SolicitudPase
@@ -40,15 +45,19 @@ class SolicitudPaseForm(forms.ModelForm):
         if documento:
             ya_existe = Persona.objects.filter(documento=documento).exists()
 
-            # Alta nueva con un DNI que ya está en el sistema: no se permite,
-            # para eso está el pase o el cambio de categoría.
+            # Alta nueva con un DNI que ya está en el sistema: solo se bloquea
+            # si ese jugador tiene un club activo (ahí sí sería un duplicado
+            # real). Si quedó sin club — por ejemplo, porque una solicitud
+            # anterior fue rechazada — se permite volver a darlo de alta,
+            # para no dejar a nadie trabado sin poder hacer nada.
             if tipo == "alta_nueva" and ya_existe:
                 persona_existente = Persona.objects.get(documento=documento)
-                raise forms.ValidationError(
-                    f"Ese documento ya está registrado a nombre de {persona_existente} "
-                    f"(club actual: {persona_existente.club_actual or 'sin club'}). "
-                    f"Si necesitás sumarlo a tu club, usá 'Pase entre clubes' en vez de 'Alta de jugador nuevo'."
-                )
+                if persona_existente.club_actual:
+                    raise forms.ValidationError(
+                        f"Ese documento ya está registrado a nombre de {persona_existente} "
+                        f"(club actual: {persona_existente.club_actual}). "
+                        f"Si necesitás sumarlo a tu club, usá 'Pase entre clubes' en vez de 'Alta de jugador nuevo'."
+                    )
 
             # Si el jugador no existe todavía, para un alta nueva son
             # obligatorios nombre, apellido y fecha de nacimiento.

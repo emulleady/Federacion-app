@@ -6,7 +6,7 @@ from datetime import date, datetime
 from django.db.models import Q
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import Persona, SolicitudPase, Vinculo, DocumentoSolicitud, Club, Categoria
+from .models import Persona, SolicitudPase, Vinculo, DocumentoSolicitud, Club, Categoria, DocumentoPersona
 from .forms import SolicitudPaseForm, ResolucionSolicitudForm
 
 
@@ -16,6 +16,10 @@ def es_delegado(usuario):
 
 def es_federacion(usuario):
     return usuario.is_authenticated and usuario.rol == "federacion"
+
+
+def es_consejo_disciplina(usuario):
+    return usuario.is_authenticated and usuario.rol == "consejo_disciplina"
 
 
 def _notificar_pedido_jugador(solicitud):
@@ -64,6 +68,8 @@ def home(request):
         return redirect("mis_solicitudes")
     elif request.user.rol == "federacion":
         return redirect("panel_solicitudes")
+    elif request.user.rol == "consejo_disciplina":
+        return redirect("panel_disciplina")
     return redirect("buscar_persona")
 
 
@@ -116,6 +122,12 @@ def nueva_solicitud(request):
             archivo = form.cleaned_data.get("archivo_documentacion")
             if archivo:
                 DocumentoSolicitud.objects.create(solicitud=solicitud, archivo=archivo)
+
+            formulario_10 = form.cleaned_data.get("formulario_10_firmado")
+            if formulario_10:
+                DocumentoSolicitud.objects.create(
+                    solicitud=solicitud, archivo=formulario_10, descripcion="Formulario 10 firmado"
+                )
 
             if estado_inicial == "pendiente_liberacion":
                 _notificar_pedido_jugador(solicitud)
@@ -234,6 +246,204 @@ def revisar_solicitud(request, solicitud_id):
     return render(request, "federacion_app/revisar_solicitud.html", {
         "solicitud": solicitud, "form": form,
     })
+
+
+@login_required
+def formulario_09(request, solicitud_id):
+    """Genera el Formulario 09: pase entre clubes."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    solicitud = get_object_or_404(SolicitudPase, id=solicitud_id)
+    persona = solicitud.persona
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
+    estilos = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle("titulo", parent=estilos["Title"], alignment=TA_CENTER, fontSize=14)
+    estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
+    elementos = []
+
+    logo_federacion = finders.find("federacion_app/logo.jpg")
+    if logo_federacion:
+        elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
+        elementos.append(Spacer(1, 6))
+
+    elementos.append(Paragraph("FORM. 09 — Pases Inter Clubes", estilo_titulo))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph("Sr. Presidente<br/>Federación Fueguina Fútbol de Salón -Futsal-", estilos["Normal"]))
+    elementos.append(Spacer(1, 14))
+
+    texto = (
+        f"El que suscribe, <b>{persona.apellido}, {persona.nombre}</b>, solicita a las autoridades que correspondan, "
+        "me sea concedido según los trámites de rigor el PASE INTER CLUBES como JUGADOR del CLUB "
+        f"<b>{solicitud.club_origen.nombre if solicitud.club_origen else '.....'}</b> al CLUB "
+        f"<b>{solicitud.club_destino.nombre}</b>."
+    )
+    elementos.append(Paragraph(texto, estilo_normal))
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph(f"RÍO GRANDE, ........... de .......................... del {date.today().year}.-", estilos["Normal"]))
+    elementos.append(Spacer(1, 24))
+
+    elementos.append(Paragraph(
+        f"Firma del jugador: _______________________________&nbsp;&nbsp;&nbsp; "
+        f"D.N.I. N°: {persona.documento}&nbsp;&nbsp;&nbsp; CARNET N°: {persona.numero_carnet or '____________'}",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 16))
+    elementos.append(Paragraph(
+        "NOTA: se requiere la firma del padre/tutor si el jugador solicitante del PASE INTER CLUBES pertenece "
+        "a las categorías: C9, C11, C13, C15, C17.",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph(
+        "Firma y aclaración padre/tutor: ____________________________&nbsp;&nbsp;&nbsp; "
+        "D.N.I. N°: ____________________________",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 26))
+
+    conformidad = [
+        [Paragraph("<b>CONFORMIDAD DEL CLUB QUE ABANDONA</b>", estilos["Normal"]),
+         Paragraph("<b>CONFORMIDAD DEL CLUB A QUE INGRESA</b>", estilos["Normal"])],
+        [Paragraph(f"{solicitud.club_origen.nombre if solicitud.club_origen else ''}", estilos["Normal"]),
+         Paragraph(f"{solicitud.club_destino.nombre}", estilos["Normal"])],
+        ["", ""],
+        ["_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente",
+         "_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente"],
+    ]
+    tabla_conformidad = Table(conformidad, colWidths=[9 * cm, 9 * cm])
+    tabla_conformidad.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    elementos.append(tabla_conformidad)
+    elementos.append(Spacer(1, 20))
+
+    estado_texto = ""
+    if solicitud.estado == "aprobado":
+        estado_texto = (
+            f"Visto la presentación realizada, se resuelve <b>APROBAR</b> el pase solicitado. "
+            f"Fecha de aprobación: {solicitud.fecha_resolucion.strftime('%d/%m/%Y') if solicitud.fecha_resolucion else ''}"
+        )
+    else:
+        estado_texto = (
+            "Visto la presentación realizada, se resuelve APROBAR el pase solicitado en carácter de "
+            "DEFINITIVO - PRÉSTAMO (tachar lo que no corresponda)."
+        )
+    elementos.append(Paragraph("<b>Para uso de la FEDERACIÓN o COMISIÓN DE DEPORTES</b>", estilos["Normal"]))
+    elementos.append(Spacer(1, 8))
+    elementos.append(Paragraph(estado_texto, estilo_normal))
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph("Firma y sello autoridad actuante: _______________________________________", estilos["Normal"]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="formulario09_{persona.apellido}.pdf"'
+    return response
+
+
+@login_required
+def formulario_10(request, solicitud_id):
+    """Genera el Formulario 10: inscripción de jugadores libres o nuevos (habilitación)."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    solicitud = get_object_or_404(SolicitudPase, id=solicitud_id)
+    persona = solicitud.persona
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
+    estilos = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle("titulo", parent=estilos["Title"], alignment=TA_CENTER, fontSize=14)
+    estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
+    elementos = []
+
+    logo_federacion = finders.find("federacion_app/logo.jpg")
+    if logo_federacion:
+        elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
+        elementos.append(Spacer(1, 6))
+
+    elementos.append(Paragraph("FORM. 10 — Inscripción de Jugadores Libres o Nuevos", estilo_titulo))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph("Sr. Presidente<br/>Federación Fueguina Fútbol de Salón -Futsal-", estilos["Normal"]))
+    elementos.append(Spacer(1, 14))
+
+    # LIBRE = ya existía en el sistema sin club; NUEVO = alta recién creada.
+    es_nuevo = "NUEVO" if solicitud.tipo == "alta_nueva" else "LIBRE"
+    texto = (
+        "Se solicita a las autoridades que correspondan, según los trámites de rigor, HABILITAR al siguiente "
+        f"jugador <b>{es_nuevo}</b> (tachar lo que no corresponda)."
+        "<br/><br/>"
+        f"Nombre y Apellido del Jugador: <b>{persona.apellido}, {persona.nombre}</b>"
+    )
+    elementos.append(Paragraph(texto, estilo_normal))
+    elementos.append(Spacer(1, 18))
+    elementos.append(Paragraph(
+        f"Firma del jugador: _______________________________&nbsp;&nbsp;&nbsp; "
+        f"D.N.I. N°: {persona.documento}&nbsp;&nbsp;&nbsp; CARNET N°: {persona.numero_carnet or '____________'}",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 16))
+    elementos.append(Paragraph(
+        "NOTA: se requiere la firma del padre/tutor si el jugador a HABILITAR pertenece a las categorías: "
+        "C9 – C11 – C13 – C15 – C17.",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph(
+        "Firma del padre/tutor: ____________________________&nbsp;&nbsp;&nbsp; D.N.I. N°: ____________________________",
+        estilos["Normal"],
+    ))
+    elementos.append(Spacer(1, 24))
+
+    elementos.append(Paragraph("<b>CONFORMIDAD DEL CLUB A QUE INGRESA</b>", estilos["Normal"]))
+    elementos.append(Paragraph(f"{solicitud.club_destino.nombre}", estilos["Normal"]))
+    elementos.append(Spacer(1, 26))
+    tabla_conformidad = Table(
+        [["_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________"],
+         ["firma Secretario &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; del CLUB &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; firma Presidente"]],
+        colWidths=[18 * cm],
+    )
+    tabla_conformidad.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 9), ("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    elementos.append(tabla_conformidad)
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph(f"RÍO GRANDE, ........... de .......................... del {date.today().year}.-", estilos["Normal"]))
+    elementos.append(Spacer(1, 24))
+
+    estado_texto = (
+        f"Visto la presentación realizada, se resuelve <b>APROBAR</b> la habilitación solicitada. "
+        f"Fecha: {solicitud.fecha_resolucion.strftime('%d/%m/%Y') if solicitud.fecha_resolucion else '_______________'}"
+        if solicitud.estado == "aprobado" else
+        "Visto la presentación realizada, se resuelve APROBAR la habilitación solicitada. Fecha: _______________"
+    )
+    elementos.append(Paragraph("<b>Para uso de la FEDERACIÓN o COMISIÓN DE DEPORTES</b>", estilos["Normal"]))
+    elementos.append(Spacer(1, 8))
+    elementos.append(Paragraph(estado_texto, estilo_normal))
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph("Firma y sello autoridad actuante: _______________________________________", estilos["Normal"]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="formulario10_{persona.apellido}.pdf"'
+    return response
 
 
 # ---------------------------------------------------------------------
@@ -531,6 +741,17 @@ def inscribir_torneo(request):
 
 
 @login_required
+@user_passes_test(es_delegado)
+def mis_inscripciones_torneo(request):
+    """Historial de todas las inscripciones a torneos hechas por el club del delegado."""
+    from .models import InscripcionTorneo
+    inscripciones = InscripcionTorneo.objects.filter(
+        club=request.user.club
+    ).select_related("persona", "torneo").order_by("-fecha_inscripcion")
+    return render(request, "federacion_app/mis_inscripciones_torneo.html", {"inscripciones": inscripciones})
+
+
+@login_required
 @user_passes_test(es_federacion)
 def marcar_pagado(request, inscripcion_id):
     from .models import InscripcionTorneo
@@ -708,12 +929,23 @@ def planilla_partido(request):
     jugadores_club = Persona.objects.filter(
         vinculos__club=club, vinculos__fecha_fin__isnull=True
     ).distinct().order_by("apellido")
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    # Categoría de cada jugador, para el filtro del lado del cliente
+    # (no recarga la página, así no se pierden los tildados al cambiar filtro).
+    jugadores_con_categoria = []
+    for p in jugadores_club:
+        vinculo = p.vinculos.filter(club=club, fecha_fin__isnull=True).first()
+        jugadores_con_categoria.append({
+            "persona": p,
+            "categoria_id": vinculo.categoria_id if vinculo and vinculo.categoria_id else "",
+        })
 
     if request.method == "POST":
         return _generar_pdf_planilla(request, club)
 
     return render(request, "federacion_app/planilla_partido.html", {
-        "jugadores": jugadores_club, "club": club,
+        "jugadores": jugadores_con_categoria, "categorias": categorias, "club": club,
     })
 
 
@@ -951,9 +1183,106 @@ def ficha_persona(request, persona_id):
             (hoy.month, hoy.day) < (persona.fecha_nacimiento.month, persona.fecha_nacimiento.day)
         )
 
+    autorizacion = persona.documentos.filter(tipo="autorizacion_fichaje").first()
+    tarjetas = persona.tarjetas.select_related("club", "torneo").order_by("-fecha_partido")
+    sanciones = persona.sanciones.order_by("-fecha_generada")
+    sanciones_disciplinarias = persona.sanciones_disciplinarias.order_by("-fecha_sancion")
+
     return render(request, "federacion_app/ficha_persona.html", {
-        "persona": persona, "historial": historial, "edad": edad,
+        "persona": persona, "historial": historial, "edad": edad, "autorizacion": autorizacion,
+        "tarjetas": tarjetas, "sanciones": sanciones, "sanciones_disciplinarias": sanciones_disciplinarias,
     })
+
+
+@login_required
+def subir_autorizacion(request, persona_id):
+    """El delegado sube el Formulario 08 ya firmado por el padre/tutor, escaneado o fotografiado."""
+    persona = get_object_or_404(Persona, id=persona_id)
+    if request.method == "POST" and request.FILES.get("archivo"):
+        DocumentoPersona.objects.create(
+            persona=persona, tipo="autorizacion_fichaje", archivo=request.FILES["archivo"],
+        )
+        messages.success(request, "Autorización firmada subida correctamente.")
+    return redirect("ficha_persona", persona_id=persona.id)
+
+
+@login_required
+def formulario_08(request, persona_id):
+    """Genera el Formulario 08: autorización de fichaje para menores de edad."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    persona = get_object_or_404(Persona, id=persona_id)
+    vinculo = persona.vinculos.filter(fecha_fin__isnull=True).first()
+    club = vinculo.club if vinculo else None
+    categoria = vinculo.categoria if vinculo else None
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
+    estilos = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle("titulo", parent=estilos["Title"], alignment=TA_CENTER, fontSize=13)
+    estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
+    elementos = []
+
+    logo_federacion = finders.find("federacion_app/logo.jpg")
+    if logo_federacion:
+        elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
+        elementos.append(Spacer(1, 6))
+
+    elementos.append(Paragraph("FORM. 08 — Autorización de fichaje e inclusión en categorías superiores", estilo_titulo))
+    elementos.append(Paragraph("(para jugadores de las categorías C7 / C9 / C11 / C13 / C15 / C17 — menores de edad)", estilo_titulo))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph("Sr. Presidente<br/>Federación Fueguina Fútbol de Salón -Futsal-", estilos["Normal"]))
+    elementos.append(Spacer(1, 14))
+
+    texto = (
+        "El que suscribe .............................................................................................., "
+        "padre-tutor del jugador "
+        f"<b>{persona.apellido}, {persona.nombre}</b>, categoría "
+        f"<b>{categoria.nombre if categoria else '.....'}</b>, clase "
+        f"<b>{persona.fecha_nacimiento.year if persona.fecha_nacimiento else '.....'}</b>, "
+        "AUTORIZA al mismo a participar de los torneos de la disciplina FÚTBOL DE SALÓN organizados en forma OFICIAL "
+        "por la FEDERACIÓN a nivel Local, Provincial y Nacional para la Entidad Deportiva Afiliada denominada "
+        f"<b>{club.nombre if club else '.....'}</b>."
+        "<br/><br/>"
+        "Esta AUTORIZACIÓN es extensiva para incluir al jugador en UNA / DOS (*) categorías inmediatas superiores, "
+        "asumiendo las responsabilidades que me correspondieren."
+        "<br/><br/>"
+        "A sus efectos, declaro el siguiente domicilio: calle ..................................................... "
+        "N°: .............. TE: .................... en esta Ciudad."
+        "<br/><br/>"
+        "(*) TACHAR LO QUE NO CORRESPONDA"
+    )
+    elementos.append(Paragraph(texto, estilo_normal))
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph(f"RÍO GRANDE, ........... de .......................... del {date.today().year}.-", estilos["Normal"]))
+    elementos.append(Spacer(1, 30))
+
+    firmas = [
+        ["Firma del jugador: _______________________________", f"DNI N°: {persona.documento}"],
+        ["", ""],
+        ["Firma del padre/tutor: _______________________________", "DNI N°: ________________________"],
+        ["", ""],
+        ["Domicilio: _______________________________________", "TE/CEL: ____________________________"],
+    ]
+    tabla_firmas = Table(firmas, colWidths=[11 * cm, 7 * cm])
+    tabla_firmas.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 10), ("TOPPADDING", (0, 0), (-1, -1), 8)]))
+    elementos.append(tabla_firmas)
+    elementos.append(Spacer(1, 30))
+    elementos.append(Paragraph("Firma y sello Entidad Deportiva que lo representa: _______________________________", estilos["Normal"]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="formulario08_{persona.apellido}.pdf"'
+    return response
 
 
 @login_required
@@ -1017,15 +1346,43 @@ def formulario_12(request):
             messages.error(request, "Elegí una categoría antes de agregar cuerpo técnico.")
 
     jugadores, tecnicos = [], []
+    ya_cargados_jugadores, ya_cargados_tecnicos = [], []
+    torneo_elegido = Torneo.objects.filter(id=torneo_id).first() if torneo_id else None
+
     if categoria:
         base = Persona.objects.filter(
             vinculos__club=club, vinculos__categoria=categoria, vinculos__fecha_fin__isnull=True
         ).distinct()
-        jugadores = base.filter(tipo="jugador").order_by("apellido")
-        tecnicos = base.filter(tipo="tecnico").order_by("apellido")
+        jugadores_qs = base.filter(tipo="jugador").order_by("apellido")
+        tecnicos_qs = base.filter(tipo="tecnico").order_by("apellido")
 
-    # Generar el/los Formulario 12 en PDF
+        if torneo_elegido:
+            # Jugadores que ya tienen inscripción para este torneo (viene de
+            # una presentación ya aprobada) no hace falta volver a cargarlos.
+            ids_jugadores_cargados = set(
+                InscripcionTorneo.objects.filter(club=club, torneo=torneo_elegido).values_list("persona_id", flat=True)
+            )
+            # Cuerpo técnico ya incluido en alguna presentación aprobada de este torneo.
+            from .models import PresentacionFormulario12
+            ids_tecnicos_cargados = set(
+                PresentacionFormulario12.objects.filter(
+                    club=club, torneo=torneo_elegido, estado="aprobado"
+                ).values_list("tecnicos__id", flat=True)
+            )
+
+            jugadores = jugadores_qs.exclude(id__in=ids_jugadores_cargados)
+            ya_cargados_jugadores = jugadores_qs.filter(id__in=ids_jugadores_cargados)
+            tecnicos = tecnicos_qs.exclude(id__in=ids_tecnicos_cargados)
+            ya_cargados_tecnicos = tecnicos_qs.filter(id__in=ids_tecnicos_cargados)
+        else:
+            jugadores = jugadores_qs
+            tecnicos = tecnicos_qs
+
+    # Generar el/los Formulario 12 en PDF, y dejar la presentación pendiente
+    # de que la federación la apruebe (no se inscribe todavía).
     if request.method == "POST" and request.POST.get("accion") == "generar":
+        from .models import PresentacionFormulario12
+
         torneo = get_object_or_404(Torneo, id=torneo_id)
         ids_seleccionados = request.POST.getlist("personas")
         seleccionadas = list(Persona.objects.filter(id__in=ids_seleccionados))
@@ -1035,22 +1392,170 @@ def formulario_12(request):
         if not seleccionadas:
             messages.error(request, "Seleccioná al menos una persona.")
         else:
-            # Actualiza el padrón: cada jugador seleccionado queda con
-            # inscripción activa para este torneo (si no la tenía ya).
-            for p in seleccionadas:
-                if p.tipo == "jugador":
-                    InscripcionTorneo.objects.get_or_create(
-                        persona=p, club=club, torneo=torneo,
-                        defaults={"inscrito_por": request.user},
-                    )
+            presentacion = PresentacionFormulario12.objects.create(
+                club=club, torneo=torneo, categoria=categoria, creado_por=request.user,
+            )
+            presentacion.jugadores.set([p for p in seleccionadas if p.tipo == "jugador"])
+            presentacion.tecnicos.set([p for p in seleccionadas if p.tipo == "tecnico"])
             return _generar_pdf_formulario_12(club, torneo, categoria, seleccionadas, request.user)
 
     return render(request, "federacion_app/formulario_12.html", {
         "torneos": torneos, "categorias": categorias,
         "torneo_id": torneo_id, "categoria": categoria,
         "jugadores": jugadores, "tecnicos": tecnicos,
+        "ya_cargados_jugadores": ya_cargados_jugadores, "ya_cargados_tecnicos": ya_cargados_tecnicos,
         "tecnico_form": tecnico_form,
     })
+
+
+@login_required
+@user_passes_test(es_delegado)
+def mis_presentaciones_formulario12(request):
+    """El delegado ve el estado de cada Formulario 12 presentado y sube el papel firmado."""
+    from .models import PresentacionFormulario12
+    presentaciones = PresentacionFormulario12.objects.filter(
+        club=request.user.club
+    ).select_related("torneo", "categoria").prefetch_related("jugadores", "tecnicos")
+    return render(request, "federacion_app/mis_presentaciones_formulario12.html", {
+        "presentaciones": presentaciones,
+    })
+
+
+@login_required
+@user_passes_test(es_delegado)
+def subir_formulario12_firmado(request, presentacion_id):
+    from .models import PresentacionFormulario12
+    presentacion = get_object_or_404(PresentacionFormulario12, id=presentacion_id, club=request.user.club)
+    if request.method == "POST" and request.FILES.get("archivo"):
+        presentacion.archivo_firmado = request.FILES["archivo"]
+        presentacion.save()
+        messages.success(request, "Formulario firmado subido. Ahora la federación lo va a revisar.")
+    return redirect("mis_presentaciones_formulario12")
+
+
+def _edad(persona):
+    if not persona.fecha_nacimiento:
+        return None
+    hoy = date.today()
+    return hoy.year - persona.fecha_nacimiento.year - (
+        (hoy.month, hoy.day) < (persona.fecha_nacimiento.month, persona.fecha_nacimiento.day)
+    )
+
+
+def _menores_sin_autorizacion(presentacion):
+    """Jugadores menores de 18 de la presentación que todavía no tienen el Form. 08 firmado subido."""
+    faltantes = []
+    for p in presentacion.jugadores.all():
+        edad = _edad(p)
+        if edad is not None and edad < 18:
+            if not p.documentos.filter(tipo="autorizacion_fichaje").exists():
+                faltantes.append(p)
+    return faltantes
+
+
+@login_required
+@user_passes_test(es_federacion)
+def presentaciones_formulario12(request):
+    """La federación revisa las presentaciones pendientes, filtrando por torneo/club/categoría."""
+    from .models import PresentacionFormulario12, Torneo
+
+    torneos = Torneo.objects.filter(activo=True)
+    clubes = Club.objects.all().order_by("nombre")
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    presentaciones = PresentacionFormulario12.objects.filter(estado="pendiente").select_related(
+        "club", "torneo", "categoria"
+    ).prefetch_related("jugadores", "tecnicos")
+
+    torneo_id = request.GET.get("torneo")
+    club_id = request.GET.get("club")
+    categoria_id = request.GET.get("categoria")
+    if torneo_id:
+        presentaciones = presentaciones.filter(torneo_id=torneo_id)
+    if club_id:
+        presentaciones = presentaciones.filter(club_id=club_id)
+    if categoria_id:
+        presentaciones = presentaciones.filter(categoria_id=categoria_id)
+
+    # Para cada presentación, quiénes son menores sin el Form. 08 subido todavía.
+    filas = [{"presentacion": p, "menores_sin_autorizacion": _menores_sin_autorizacion(p)} for p in presentaciones]
+
+    return render(request, "federacion_app/presentaciones_formulario12.html", {
+        "filas": filas, "torneos": torneos, "clubes": clubes, "categorias": categorias,
+        "torneo_id": torneo_id, "club_id": club_id, "categoria_id": categoria_id,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def historial_presentaciones_formulario12(request):
+    """Historial de presentaciones ya resueltas (aprobadas o rechazadas), con los mismos filtros."""
+    from .models import PresentacionFormulario12, Torneo
+
+    torneos = Torneo.objects.filter(activo=True)
+    clubes = Club.objects.all().order_by("nombre")
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    presentaciones = PresentacionFormulario12.objects.filter(
+        estado__in=["aprobado", "rechazado"]
+    ).select_related("club", "torneo", "categoria", "aprobado_por").prefetch_related("jugadores", "tecnicos")
+
+    torneo_id = request.GET.get("torneo")
+    club_id = request.GET.get("club")
+    categoria_id = request.GET.get("categoria")
+    if torneo_id:
+        presentaciones = presentaciones.filter(torneo_id=torneo_id)
+    if club_id:
+        presentaciones = presentaciones.filter(club_id=club_id)
+    if categoria_id:
+        presentaciones = presentaciones.filter(categoria_id=categoria_id)
+
+    presentaciones = presentaciones.order_by("-fecha_aprobacion")
+
+    return render(request, "federacion_app/historial_presentaciones_formulario12.html", {
+        "presentaciones": presentaciones, "torneos": torneos, "clubes": clubes, "categorias": categorias,
+        "torneo_id": torneo_id, "club_id": club_id, "categoria_id": categoria_id,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def resolver_presentacion_formulario12(request, presentacion_id):
+    """Aprobar o rechazar una presentación. Al aprobar, recién ahí se inscriben los jugadores al torneo."""
+    from .models import PresentacionFormulario12, InscripcionTorneo
+
+    presentacion = get_object_or_404(PresentacionFormulario12, id=presentacion_id)
+    if request.method == "POST":
+        accion = request.POST.get("accion")
+        if accion == "aprobar":
+            faltantes = _menores_sin_autorizacion(presentacion)
+            if faltantes:
+                nombres = ", ".join(str(p) for p in faltantes)
+                messages.error(
+                    request,
+                    f"No se puede aprobar: falta el Formulario 08 firmado de: {nombres}. "
+                    f"Pedile al delegado que lo suba desde la ficha de cada jugador."
+                )
+                return redirect("presentaciones_formulario12")
+
+            for p in presentacion.jugadores.all():
+                InscripcionTorneo.objects.get_or_create(
+                    persona=p, club=presentacion.club, torneo=presentacion.torneo,
+                    defaults={"inscrito_por": presentacion.creado_por},
+                )
+            presentacion.estado = "aprobado"
+            presentacion.aprobado_por = request.user
+            presentacion.fecha_aprobacion = date.today()
+            presentacion.save()
+            messages.success(request, f"Presentación aprobada. {presentacion.jugadores.count()} jugador(es) inscriptos.")
+        else:
+            presentacion.estado = "rechazado"
+            presentacion.motivo_rechazo = request.POST.get("motivo_rechazo", "")
+            presentacion.aprobado_por = request.user
+            presentacion.fecha_aprobacion = date.today()
+            presentacion.save()
+            messages.info(request, "Presentación rechazada.")
+    return redirect("presentaciones_formulario12")
 
 
 def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
@@ -1230,3 +1735,337 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
     response = HttpResponse(buffer, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="formulario12_{club.nombre}_{categoria}.pdf"'
     return response
+
+
+@login_required
+@user_passes_test(es_delegado)
+def formulario_07(request):
+    """Pantalla para cargar hasta 4 delegados deportivos y generar el Formulario 07."""
+    if request.method == "POST":
+        return _generar_pdf_formulario_07(request, request.user.club)
+    return render(request, "federacion_app/formulario_07.html", {"club": request.user.club})
+
+
+def _generar_pdf_formulario_07(request, club):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Image, Spacer, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    temporada = request.POST.get("temporada", "")
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.3 * cm, bottomMargin=1.3 * cm)
+    estilos = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle("titulo", parent=estilos["Title"], alignment=TA_CENTER, fontSize=13)
+    estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=9, leading=13, alignment=TA_JUSTIFY)
+    estilo_delegado = ParagraphStyle("delegado", parent=estilos["Normal"], fontSize=9.5, leading=15)
+    elementos = []
+
+    logo_federacion = finders.find("federacion_app/logo.jpg")
+    if logo_federacion:
+        elementos.append(Image(logo_federacion, width=2 * cm, height=2 * cm))
+        elementos.append(Spacer(1, 6))
+
+    elementos.append(Paragraph("FORM. 07 — Designación Delegados Deportivos", estilo_titulo))
+    elementos.append(Spacer(1, 8))
+    elementos.append(Paragraph("Sr. Presidente<br/>Federación Fueguina Fútbol de Salón -Futsal-", estilos["Normal"]))
+    elementos.append(Spacer(1, 12))
+
+    texto_intro = (
+        f"Los que suscriben, integrantes de la ENTIDAD deportiva denominada <b>{club.nombre}</b>, tenemos el agrado "
+        "de dirigirnos a Ud. con el objeto de informarle la designación de los DELEGADOS DEPORTIVOS que nos "
+        f"representarán en las reuniones ordinarias que la competencia local, provincial de la temporada "
+        f"<b>{temporada}</b>, siendo sus datos filiatorios los abajo detallados y delegando en los mismos la mayor "
+        "facultad y responsabilidad ante la Federación Fueguina Fútbol de Salón -Futsal-, anticipando que los "
+        "mismos declaran conocer y aceptar las siguientes condiciones, tal lo hiciera nuestra ENTIDAD, a saber:"
+    )
+    elementos.append(Paragraph(texto_intro, estilo_normal))
+    elementos.append(Spacer(1, 8))
+
+    condiciones = [
+        "Reconocemos y aceptamos que el Fútbol de Salón o Futsal es patrimonio exclusivo en el país de la "
+        "Confederación Argentina de Fútbol de Salón / Futsal.",
+        "Declaramos conocer y aceptar el Reglamento de Juego y las condiciones exigidas por la CAFS en sus "
+        "normas de procedimiento.",
+        "Declaramos conocer y aceptar las normas vigentes para asociarnos a la Federación Fueguina Fútbol de "
+        "Salón -Futsal-.",
+        "Declaramos conocer y aceptar el alto grado de competitividad alcanzado en los torneos organizados por "
+        "la entidad y la CAFS.",
+        "Declaramos conocer y aceptar la existencia de potenciales riesgos para la salud en la práctica de "
+        "Fútbol de Salón o Futsal.",
+        "Declaramos conocer y aceptar las obligaciones Estatutarias y Reglamentarias de la Federación y la CAFS.",
+        "Nos comprometemos a mantener vigente la cobertura de seguros contra accidentes personales exigida.",
+        "Liberamos de toda responsabilidad a la CAFS, sus afiliadas y dirigentes por cualquier accidente que "
+        "pudiera ocurrir durante traslados, antes, durante y después de cualquier competencia.",
+    ]
+    for c in condiciones:
+        elementos.append(Paragraph(f"• {c}", estilo_normal))
+        elementos.append(Spacer(1, 3))
+
+    elementos.append(Spacer(1, 10))
+
+    etiquetas = ["1er DELEGADO DEPORTIVO", "2do DELEGADO DEPORTIVO", "3er DELEGADO DEPORTIVO", "4to DELEGADO DEPORTIVO"]
+    for i, etiqueta in enumerate(etiquetas, start=1):
+        nombre = request.POST.get(f"nombre_{i}", "")
+        dni = request.POST.get(f"dni_{i}", "")
+        fecha_nac = request.POST.get(f"fecha_nac_{i}", "")
+        domicilio = request.POST.get(f"domicilio_{i}", "")
+        localidad = request.POST.get(f"localidad_{i}", "")
+        telefono = request.POST.get(f"telefono_{i}", "")
+
+        if not nombre:
+            continue
+
+        elementos.append(Paragraph(f"<b>{etiqueta}</b>", estilo_delegado))
+        elementos.append(Paragraph(
+            f"Sr./a: {nombre} — DNI N°: {dni} — Fe. Nac.: {fecha_nac}<br/>"
+            f"Domicilio: {domicilio} — Localidad: {localidad} — TE fijo o CEL: {telefono}",
+            estilo_delegado,
+        ))
+        elementos.append(Spacer(1, 8))
+
+    elementos.append(Spacer(1, 20))
+    elementos.append(Paragraph(f"Firma y sello entidad Deportiva: {club.nombre} — ___________________________________", estilos["Normal"]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="formulario07_{club.nombre}.pdf"'
+    return response
+
+
+# ---------------------------------------------------------------------
+# TARJETAS Y SANCIONES
+# ---------------------------------------------------------------------
+
+# Montos por umbral, según el reglamento de la federación. Si se supera
+# la 4ta ocurrencia, se sigue usando el último monto de la tabla.
+MONTOS_AMARILLA = [20000, 25000, 30000, 35000]
+MONTOS_AZUL_INDIRECTA = [30000, 35000, 40000, 45000]
+MONTOS_AZUL_DIRECTA = [40000, 45000, 50000, 55000]
+
+
+def _monto_por_ocurrencia(lista_montos, ocurrencia):
+    indice = min(ocurrencia - 1, len(lista_montos) - 1)
+    return lista_montos[indice]
+
+
+def _revisar_umbrales_sancion(persona, club):
+    """
+    Después de cargar una tarjeta, revisa si el jugador llegó a algún
+    umbral nuevo (4ta/8va/... amarilla, 2da/4ta/... azul indirecta, o
+    cualquier azul directa) y genera la sanción correspondiente si
+    todavía no existía.
+    """
+    from .models import Tarjeta, SancionTarjeta
+
+    # Amarillas: cada grupo de 4
+    total_amarillas = Tarjeta.objects.filter(persona=persona, tipo="amarilla").count()
+    if total_amarillas and total_amarillas % 4 == 0:
+        ocurrencia = total_amarillas // 4
+        SancionTarjeta.objects.get_or_create(
+            persona=persona, tipo_tarjeta="amarilla", numero_ocurrencia=ocurrencia,
+            defaults={"club": club, "monto": _monto_por_ocurrencia(MONTOS_AMARILLA, ocurrencia)},
+        )
+
+    # Azules indirectas: cada grupo de 2
+    total_indirectas = Tarjeta.objects.filter(persona=persona, tipo="azul_indirecta").count()
+    if total_indirectas and total_indirectas % 2 == 0:
+        ocurrencia = total_indirectas // 2
+        SancionTarjeta.objects.get_or_create(
+            persona=persona, tipo_tarjeta="azul_indirecta", numero_ocurrencia=ocurrencia,
+            defaults={"club": club, "monto": _monto_por_ocurrencia(MONTOS_AZUL_INDIRECTA, ocurrencia)},
+        )
+
+    # Azules directas: cada tarjeta individual ya sanciona
+    total_directas = Tarjeta.objects.filter(persona=persona, tipo="azul_directa").count()
+    if total_directas:
+        SancionTarjeta.objects.get_or_create(
+            persona=persona, tipo_tarjeta="azul_directa", numero_ocurrencia=total_directas,
+            defaults={"club": club, "monto": _monto_por_ocurrencia(MONTOS_AZUL_DIRECTA, total_directas)},
+        )
+
+
+@login_required
+@user_passes_test(es_federacion)
+def cargar_tarjeta(request):
+    """La federación carga una tarjeta a un jugador después de un partido."""
+    from .models import Tarjeta, Torneo
+
+    clubes = Club.objects.all().order_by("nombre")
+    torneos = Torneo.objects.filter(activo=True)
+    club_id = request.POST.get("club") or request.GET.get("club")
+    club_elegido = Club.objects.filter(id=club_id).first() if club_id else None
+
+    jugadores = []
+    if club_elegido:
+        jugadores = Persona.objects.filter(
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+        ).distinct().order_by("apellido")
+
+    if request.method == "POST" and request.POST.get("accion") == "cargar":
+        persona = get_object_or_404(Persona, id=request.POST.get("persona"))
+        tipo = request.POST.get("tipo")
+        fecha_partido = request.POST.get("fecha_partido")
+        torneo_id = request.POST.get("torneo")
+
+        Tarjeta.objects.create(
+            persona=persona, club=club_elegido, tipo=tipo, fecha_partido=fecha_partido,
+            torneo_id=torneo_id or None, observacion=request.POST.get("observacion", ""),
+            cargada_por=request.user,
+        )
+        _revisar_umbrales_sancion(persona, club_elegido)
+        messages.success(request, f"Tarjeta cargada para {persona}.")
+        return redirect(f"/tarjetas/cargar/?club={club_elegido.id}")
+
+    return render(request, "federacion_app/cargar_tarjeta.html", {
+        "clubes": clubes, "torneos": torneos, "club_elegido": club_elegido, "jugadores": jugadores,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def sanciones_pendientes(request):
+    """La federación ve las sanciones pendientes y las resuelve (pagado / cumplida)."""
+    from .models import SancionTarjeta
+    sanciones = SancionTarjeta.objects.filter(estado="pendiente").select_related("persona", "club")
+    return render(request, "federacion_app/sanciones_pendientes.html", {"sanciones": sanciones})
+
+
+@login_required
+@user_passes_test(es_federacion)
+def resolver_sancion(request, sancion_id):
+    from .models import SancionTarjeta
+    sancion = get_object_or_404(SancionTarjeta, id=sancion_id)
+    if request.method == "POST":
+        accion = request.POST.get("accion")
+        if accion in ("pagado", "cumplido"):
+            sancion.estado = accion
+            sancion.fecha_resolucion = date.today()
+            sancion.resuelto_por = request.user
+            sancion.save()
+            messages.success(request, f"Sanción de {sancion.persona} marcada como {sancion.get_estado_display()}.")
+    return redirect("sanciones_pendientes")
+
+
+@login_required
+@user_passes_test(es_delegado)
+def mis_sanciones(request):
+    """El delegado ve las sanciones (por tarjetas y disciplinarias) de su club y sube el comprobante de pago."""
+    from .models import SancionTarjeta, SancionDisciplinaria
+    sanciones = SancionTarjeta.objects.filter(club=request.user.club).select_related("persona")
+    sanciones_disciplinarias = SancionDisciplinaria.objects.filter(club=request.user.club).select_related("persona")
+    return render(request, "federacion_app/mis_sanciones.html", {
+        "sanciones": sanciones, "sanciones_disciplinarias": sanciones_disciplinarias,
+    })
+
+
+@login_required
+@user_passes_test(es_delegado)
+def mis_tarjetas(request):
+    """El delegado ve todas las tarjetas de su club, con un resumen de cuánto le falta a cada jugador para el próximo umbral."""
+    from .models import Tarjeta
+    from collections import defaultdict
+
+    tarjetas = Tarjeta.objects.filter(club=request.user.club).select_related("persona", "torneo").order_by("-fecha_partido")
+
+    # Resumen por jugador: cuántas tiene de cada tipo, y cuántas le faltan
+    # para el próximo umbral (4 amarillas, 2 azules indirectas).
+    conteo = defaultdict(lambda: {"persona": None, "amarilla": 0, "azul_indirecta": 0, "azul_directa": 0})
+    for t in tarjetas:
+        conteo[t.persona_id]["persona"] = t.persona
+        conteo[t.persona_id][t.tipo] += 1
+
+    resumen = []
+    for datos in conteo.values():
+        resumen.append({
+            "persona": datos["persona"],
+            "amarillas": datos["amarilla"],
+            "faltan_amarilla": (4 - datos["amarilla"] % 4) % 4 or 4,
+            "azules_indirectas": datos["azul_indirecta"],
+            "faltan_indirecta": (2 - datos["azul_indirecta"] % 2) % 2 or 2,
+            "azules_directas": datos["azul_directa"],
+        })
+    resumen.sort(key=lambda r: str(r["persona"]))
+
+    return render(request, "federacion_app/mis_tarjetas.html", {"tarjetas": tarjetas, "resumen": resumen})
+
+
+@login_required
+@user_passes_test(es_delegado)
+def subir_comprobante_sancion(request, sancion_id):
+    from .models import SancionTarjeta
+    sancion = get_object_or_404(SancionTarjeta, id=sancion_id, club=request.user.club)
+    if request.method == "POST" and request.FILES.get("archivo"):
+        sancion.comprobante_pago = request.FILES["archivo"]
+        sancion.save()
+        messages.success(request, "Comprobante subido. La federación lo va a revisar antes del próximo partido.")
+    return redirect("mis_sanciones")
+
+
+# ---------------------------------------------------------------------
+# CONSEJO DE DISCIPLINA
+# ---------------------------------------------------------------------
+
+def _es_consejo_o_federacion(usuario):
+    return usuario.is_authenticated and usuario.rol in ("consejo_disciplina", "federacion")
+
+
+@login_required
+@user_passes_test(_es_consejo_o_federacion)
+def panel_disciplina(request):
+    """
+    Único módulo al que accede el Consejo de Disciplina: buscar un
+    jugador (por documento o apellido, sin necesitar el buscador
+    general) y cargarle una sanción con su informe adjunto.
+    """
+    from .models import SancionDisciplinaria
+
+    query = request.GET.get("q", "").strip()
+    resultados = []
+    if query:
+        resultados = Persona.objects.filter(
+            Q(documento__icontains=query) | Q(apellido__icontains=query)
+        )[:15]
+
+    persona_id = request.GET.get("persona")
+    persona_elegida = Persona.objects.filter(id=persona_id).first() if persona_id else None
+
+    if request.method == "POST":
+        persona = get_object_or_404(Persona, id=request.POST.get("persona"))
+        vinculo = persona.vinculos.filter(fecha_fin__isnull=True).first()
+        SancionDisciplinaria.objects.create(
+            persona=persona,
+            club=vinculo.club if vinculo else None,
+            motivo=request.POST.get("motivo", ""),
+            informe=request.FILES.get("informe"),
+            fecha_sancion=request.POST.get("fecha_sancion"),
+            cantidad_fechas=request.POST.get("cantidad_fechas") or None,
+            cargada_por=request.user,
+        )
+        messages.success(request, f"Sanción disciplinaria cargada para {persona}.")
+        return redirect("panel_disciplina")
+
+    sanciones = SancionDisciplinaria.objects.select_related("persona", "club").order_by("-fecha_sancion")[:50]
+
+    return render(request, "federacion_app/panel_disciplina.html", {
+        "query": query, "resultados": resultados, "persona_elegida": persona_elegida,
+        "sanciones": sanciones,
+    })
+
+
+@login_required
+@user_passes_test(_es_consejo_o_federacion)
+def resolver_sancion_disciplinaria(request, sancion_id):
+    from .models import SancionDisciplinaria
+    sancion = get_object_or_404(SancionDisciplinaria, id=sancion_id)
+    if request.method == "POST":
+        sancion.estado = "cumplida"
+        sancion.save()
+        messages.success(request, f"Sanción de {sancion.persona} marcada como cumplida.")
+    return redirect("panel_disciplina")

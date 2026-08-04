@@ -253,6 +253,9 @@
     .badge-revision { background: #dbeafe; color: #1e40af; }
     .badge-aprobado { background: #dcfce7; color: #166534; }
     .badge-cobrado { background: #dcfce7; color: #166534; }
+    .badge-pagado { background: #dcfce7; color: #166534; }
+    .badge-cumplido { background: #dbeafe; color: #1e40af; }
+    .badge-activa { background: #fee2e2; color: #991b1b; }
     .badge-rechazado { background: #fee2e2; color: #991b1b; }
   </style>
 </head>
@@ -270,8 +273,14 @@
           <a href="{% url 'nueva_solicitud' %}">Nueva solicitud</a>
           <a href="{% url 'mis_solicitudes' %}">Mis solicitudes</a>
           <a href="{% url 'solicitudes_a_liberar' %}">Me piden jugadores</a>
-          <a href="{% url 'inscribir_torneo' %}">Inscribir a torneo</a>
           <a href="{% url 'formulario_12' %}">Formulario 12</a>
+          <a href="{% url 'mis_presentaciones_formulario12' %}">Mis presentaciones</a>
+          <a href="{% url 'formulario_07' %}">Formulario 07</a>
+          <a href="{% url 'mis_sanciones' %}">
+            Sanciones
+            {% if sanciones_pendientes_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ sanciones_pendientes_count }}</span>{% endif %}
+          </a>
+          <a href="{% url 'mis_tarjetas' %}">Tarjetas</a>
           <a href="{% url 'planilla_partido' %}">Planilla de partido</a>
         {% endif %}
         {% if user.rol == "federacion" %}
@@ -279,8 +288,18 @@
           <a href="{% url 'padron_club' %}">Padrón por club</a>
           <a href="{% url 'importar_excel' %}">Importar Excel</a>
           <a href="{% url 'cobro_masivo' %}">Cobros de torneos</a>
+          <a href="{% url 'presentaciones_formulario12' %}">Presentaciones Form. 12</a>
+          <a href="{% url 'cargar_tarjeta' %}">Cargar tarjeta</a>
+          <a href="{% url 'sanciones_pendientes' %}">Sanciones pendientes</a>
+          <a href="{% url 'historial_presentaciones_formulario12' %}">Historial Form. 12</a>
+          <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
         {% endif %}
-        <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
+        {% if user.rol == "consejo_disciplina" %}
+          <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
+        {% endif %}
+        {% if user.rol != "consejo_disciplina" %}
+          <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
+        {% endif %}
         <form action="{% url 'logout' %}" method="post" style="display:inline;">
           {% csrf_token %}
           <button type="submit" class="logout-btn">Cerrar sesión</button>

@@ -28,6 +28,24 @@
           Sin carnet cargado
         {% endif %}
       </p>
+      {% if edad and edad < 18 %}
+      <p style="margin:8px 0 0;">
+        <a href="{% url 'formulario_08' persona.id %}" target="_blank">📄 Descargar Formulario 08 (Autorización de fichaje — menor de edad)</a>
+      </p>
+      <div style="margin-top:8px;">
+        {% if autorizacion %}
+          <span class="badge badge-aprobado">✓ Autorización firmada subida</span>
+          <a href="{{ autorizacion.archivo.url }}" target="_blank" style="margin-left:8px; font-size:13px;">Ver archivo</a>
+        {% else %}
+          <span class="badge badge-pendiente">Falta subir la autorización firmada</span>
+        {% endif %}
+        <form method="post" action="{% url 'subir_autorizacion' persona.id %}" enctype="multipart/form-data" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+          {% csrf_token %}
+          <input type="file" name="archivo" required style="font-size:12px;">
+          <button type="submit" style="padding:6px 12px; font-size:13px;">Subir firmada</button>
+        </form>
+      </div>
+      {% endif %}
     </div>
     <div style="margin-left:auto; display:flex; align-items:center; justify-content:center; width:130px; height:130px; flex-shrink:0;">
       {% if persona.club_actual.escudo %}
@@ -58,4 +76,48 @@
   </tr>
   {% endfor %}
 </table>
+
+{% if tarjetas %}
+<h3 style="margin-top:20px;">Tarjetas</h3>
+<table>
+  <tr><th>Tipo</th><th>Fecha</th><th>Club</th><th>Torneo</th></tr>
+  {% for t in tarjetas %}
+  <tr>
+    <td>{{ t.get_tipo_display }}</td>
+    <td>{{ t.fecha_partido|date:"d/m/Y" }}</td>
+    <td>{{ t.club.nombre }}</td>
+    <td>{{ t.torneo|default:"—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if sanciones %}
+<h3 style="margin-top:20px;">Sanciones</h3>
+<table>
+  <tr><th>Sanción</th><th>Monto</th><th>Estado</th></tr>
+  {% for s in sanciones %}
+  <tr>
+    <td>{{ s.get_tipo_tarjeta_display }} — {{ s.numero_ocurrencia }}° vez</td>
+    <td>${{ s.monto }}</td>
+    <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if sanciones_disciplinarias %}
+<h3 style="margin-top:20px;">Sanciones disciplinarias</h3>
+<table>
+  <tr><th>Motivo</th><th>Fecha</th><th>Estado</th><th>Informe</th></tr>
+  {% for s in sanciones_disciplinarias %}
+  <tr>
+    <td>{{ s.motivo|truncatewords:15 }}</td>
+    <td>{{ s.fecha_sancion|date:"d/m/Y" }}{% if s.cantidad_fechas %} · {{ s.cantidad_fechas }} fecha(s){% endif %}</td>
+    <td><span class="badge badge-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+    <td>{% if s.informe %}<a href="{{ s.informe.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
 {% endblock %}
