@@ -271,7 +271,7 @@ def formulario_09(request, solicitud_id):
     estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
     elementos = []
 
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     if logo_federacion:
         elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
         elementos.append(Spacer(1, 6))
@@ -375,7 +375,7 @@ def formulario_10(request, solicitud_id):
     estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
     elementos = []
 
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     if logo_federacion:
         elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
         elementos.append(Spacer(1, 6))
@@ -967,7 +967,7 @@ def _generar_pdf_planilla(request, club):
     elementos = []
 
     # --- Encabezado: logo federación | nombre del club | escudo del club ---
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     img_federacion = Image(logo_federacion, width=2.5 * cm, height=2.5 * cm) if logo_federacion else ""
     img_club = Image(club.escudo.path, width=2.5 * cm, height=2.5 * cm) if club.escudo else ""
 
@@ -1231,7 +1231,7 @@ def formulario_08(request, persona_id):
     estilo_normal = ParagraphStyle("normal", parent=estilos["Normal"], fontSize=10, leading=17, alignment=TA_JUSTIFY)
     elementos = []
 
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     if logo_federacion:
         elementos.append(Image(logo_federacion, width=2.3 * cm, height=2.3 * cm))
         elementos.append(Spacer(1, 6))
@@ -1581,7 +1581,7 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
     estilo_centro = ParagraphStyle("centro", parent=estilos["Normal"], fontSize=7.5, alignment=TA_CENTER, leading=9)
     elementos = []
 
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     img_federacion_chico = Image(logo_federacion, width=1.4 * cm, height=1.4 * cm) if logo_federacion else ""
     img_club_chico = Image(club.escudo.path, width=1.4 * cm, height=1.4 * cm) if club.escudo else ""
 
@@ -1766,7 +1766,7 @@ def _generar_pdf_formulario_07(request, club):
     estilo_delegado = ParagraphStyle("delegado", parent=estilos["Normal"], fontSize=9.5, leading=15)
     elementos = []
 
-    logo_federacion = finders.find("federacion_app/logo.jpg")
+    logo_federacion = finders.find("federacion_app/logo.png")
     if logo_federacion:
         elementos.append(Image(logo_federacion, width=2 * cm, height=2 * cm))
         elementos.append(Spacer(1, 6))

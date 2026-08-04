@@ -45,20 +45,22 @@
       text-align: center;
       color: white;
       padding: 40px;
+      max-width: 560px;
     }
 
     .logo {
-      width: 260px;
-      height: 260px;
+      width: 340px;
+      height: 340px;
       object-fit: contain;
       margin-bottom: 24px;
       filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
     }
 
     h1 {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 700;
       margin: 0 0 8px;
+      line-height: 1.3;
     }
 
     p.subtitulo {
@@ -86,8 +88,8 @@
   <div class="overlay"></div>
 
   <div class="contenido">
-    <img src="{% static 'federacion_app/logo.jpg' %}" class="logo" alt="Logo de la federación">
-    <h1>Sistema de gestión de la federación</h1>
+    <img src="{% static 'federacion_app/logo.png' %}" class="logo" alt="Logo de la federación">
+    <h1>SISTEMA DE GESTIÓN DE LA FEDERACIÓN FUEGUINA DE FÚTBOL DE SALÓN</h1>
     <p class="subtitulo">Registro de jugadores, pases y clubes</p>
     <a href="{% url 'login' %}" class="btn-ingresar">Ingresar</a>
   </div>
