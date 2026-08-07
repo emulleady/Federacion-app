@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>Enviar notificación a clubes</h2>
-  <form method="post">
+  <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div style="margin-bottom:14px;">
       <label>Título</label>
@@ -11,6 +11,10 @@
     <div style="margin-bottom:14px;">
       <label>Mensaje</label>
       <textarea name="mensaje" rows="4" required></textarea>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label>Archivo adjunto (opcional)</label>
+      <input type="file" name="archivo">
     </div>
     <div style="margin-bottom:16px;">
       <label>Destinatarios (dejá vacío para enviar a todos los clubes)</label>
@@ -30,6 +34,9 @@
     {{ fila.notificacion.fecha_creacion|date:"d/m/Y H:i" }} ·
     {% if fila.notificacion.destinatarios.all %}{% for c in fila.notificacion.destinatarios.all %}{{ c.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}Todos los clubes{% endif %}
   </p>
+  {% if fila.notificacion.archivo %}
+  <p style="margin:0 0 10px;"><a href="{{ fila.notificacion.archivo.url }}" target="_blank">📎 Ver documento adjunto</a></p>
+  {% endif %}
 
   <table>
     <tr><th>Club</th><th>Acuse</th><th>Respuesta</th></tr>

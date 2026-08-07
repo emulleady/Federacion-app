@@ -18,6 +18,10 @@
 
   <p style="margin:12px 0; white-space:pre-line;">{{ fila.notificacion.mensaje }}</p>
 
+  {% if fila.notificacion.archivo %}
+  <p><a href="{{ fila.notificacion.archivo.url }}" target="_blank">📎 Ver documento adjunto</a></p>
+  {% endif %}
+
   {% if fila.acuse.respuesta %}
   <div class="mensaje" style="background:#eff6ff; border-left-color:#2563eb; color:#1e40af;">
     <strong>Tu respuesta ({{ fila.acuse.fecha_respuesta|date:"d/m/Y" }}):</strong> {{ fila.acuse.respuesta }}

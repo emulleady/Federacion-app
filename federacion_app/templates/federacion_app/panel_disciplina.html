@@ -53,6 +53,32 @@
         <input type="file" name="informe">
       </div>
     </div>
+
+    <div class="card" style="background:#f9fafb; box-shadow:none; border:1px solid #e5e7eb; margin-top:16px;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; color:#0f2a4a;">
+        <input type="checkbox" name="notificar_club" value="1" style="width:auto;">
+        Notificar al club de esta sanción
+      </label>
+      <p style="color:#6b7280; font-size:12px; margin:6px 0 12px;">
+        Si tildás esto, se le manda una notificación al club (visible en su pantalla de Notificaciones),
+        con la resolución adjunta. Si no subís un archivo aparte, se usa el mismo informe de arriba.
+      </p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <div>
+          <label>Título de la notificación (opcional)</label>
+          <input type="text" name="titulo_notificacion" placeholder="Ej: Resolución disciplinaria">
+        </div>
+        <div>
+          <label>Resolución / notificación adjunta (opcional, si es distinta al informe)</label>
+          <input type="file" name="archivo_notificacion">
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Mensaje (opcional, si lo dejás vacío se usa el motivo de la sanción)</label>
+          <textarea name="mensaje_notificacion" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
     <button type="submit" style="margin-top:14px;">Cargar sanción</button>
   </form>
 </div>

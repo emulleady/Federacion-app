@@ -9,6 +9,7 @@ Pensado para Django + PostgreSQL. Ajustar nombres de campos al
 reglamento real de la federación (categorías, tipos de documento, etc).
 """
 
+from datetime import date
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -51,9 +52,20 @@ class Club(models.Model):
     fecha_afiliacion = models.DateField()
     activo = models.BooleanField(default=True)
     escudo = models.ImageField(upload_to="escudos_clubes/", null=True, blank=True)
+    club_madre = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="sucursales",
+        help_text="Si este club es una segunda entidad de otro (ej: 'Real Madrid Azul' bajo 'Real Madrid'), elegí acá el club madre.",
+    )
 
     class Meta:
         ordering = ["nombre"]
+
+    def club_raiz(self):
+        """Club madre, o el club mismo si no tiene madre. Dos clubes son 'hermanos' si comparten esta raíz."""
+        return self.club_madre or self
+
+    def es_hermano_de(self, otro_club):
+        return self.club_raiz().id == otro_club.club_raiz().id
 
     def __str__(self):
         return self.nombre
@@ -104,6 +116,7 @@ class Persona(models.Model):
     foto = models.ImageField(upload_to="fotos_personas/", null=True, blank=True)
     numero_carnet = models.CharField(max_length=30, blank=True, help_text="Número de carnet de la federación, si ya lo tiene.")
     requiere_carnet = models.BooleanField(default=False, help_text="Marcar si hay que tramitarle el carnet.")
+    activo = models.BooleanField(default=True, help_text="Si está desactivado, no puede jugar ni ser seleccionado en planillas.")
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -115,8 +128,16 @@ class Persona(models.Model):
 
     @property
     def club_actual(self):
-        vinculo = self.vinculos.filter(fecha_fin__isnull=True).first()
+        """El club de referencia: el vínculo activo marcado como principal (o el primero, si ninguno lo está)."""
+        vinculo = self.vinculos.filter(fecha_fin__isnull=True, es_principal=True).first()
+        if not vinculo:
+            vinculo = self.vinculos.filter(fecha_fin__isnull=True).first()
         return vinculo.club if vinculo else None
+
+    @property
+    def vinculos_activos(self):
+        """Todos los vínculos activos de la persona (puede ser más de uno, si son clubes hermanos)."""
+        return self.vinculos.filter(fecha_fin__isnull=True).select_related("club", "categoria")
 
 
 class DocumentoPersona(models.Model):
@@ -145,6 +166,14 @@ class Vinculo(models.Model):
     fecha_fin nula = vínculo activo. Nunca se borra un vínculo viejo:
     se cierra (se le pone fecha_fin) y se crea uno nuevo. Así queda
     el historial completo sin perder nada.
+
+    Una persona puede tener MÁS DE UN vínculo activo a la vez, siempre
+    que los clubes sean "hermanos" (compartan la misma club_raiz()) —
+    por ejemplo, un jugador de categorías menores que también integra
+    el primer equipo de la segunda entidad del mismo club. Entre todos
+    los vínculos activos de una persona, uno queda marcado como
+    "principal" (es_principal=True) para saber cuál mostrar como
+    referencia en el padrón y la ficha.
     """
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="vinculos")
     club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="vinculos")
@@ -152,21 +181,32 @@ class Vinculo(models.Model):
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField(null=True, blank=True)
     numero_camiseta = models.PositiveSmallIntegerField(null=True, blank=True)
+    es_principal = models.BooleanField(
+        default=True,
+        help_text="Entre los vínculos activos de una persona, cuál se muestra como club de referencia.",
+    )
 
     class Meta:
         ordering = ["-fecha_inicio"]
-        constraints = [
-            # Evita que una persona tenga dos vínculos activos a la vez
-            models.UniqueConstraint(
-                fields=["persona"],
-                condition=models.Q(fecha_fin__isnull=True),
-                name="unico_vinculo_activo_por_persona",
-            )
-        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.fecha_fin is None:
+            otros_activos = Vinculo.objects.filter(
+                persona_id=self.persona_id, fecha_fin__isnull=True
+            ).exclude(pk=self.pk)
+            for otro in otros_activos:
+                if not self.club.es_hermano_de(otro.club):
+                    raise ValidationError(
+                        f"Esta persona ya tiene un vínculo activo en {otro.club}, que no es un club "
+                        f"hermano de {self.club}. Cerrá ese vínculo antes de crear uno nuevo, salvo "
+                        f"que sean clubes de la misma familia (mismo club madre)."
+                    )
 
     def __str__(self):
         estado = "activo" if not self.fecha_fin else f"hasta {self.fecha_fin}"
-        return f"{self.persona} en {self.club} ({estado})"
+        principal = " · principal" if self.es_principal and not self.fecha_fin else ""
+        return f"{self.persona} en {self.club} ({estado}{principal})"
 
 
 # ---------------------------------------------------------------------
@@ -194,6 +234,14 @@ class SolicitudPase(models.Model):
     ]
 
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    TIPO_PASE_CHOICES = [
+        ("definitivo", "Definitivo"),
+        ("prestamo", "Préstamo"),
+    ]
+    tipo_pase = models.CharField(
+        max_length=20, choices=TIPO_PASE_CHOICES, blank=True,
+        help_text="Solo aplica cuando tipo='pase'",
+    )
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="solicitudes")
     club_origen = models.ForeignKey(
         Club, null=True, blank=True, on_delete=models.PROTECT,
@@ -242,20 +290,38 @@ class SolicitudPase(models.Model):
 
     def aprobar(self, usuario_resuelve):
         """
-        Al aprobar: cierra el vínculo activo anterior (si existe) y
-        crea el nuevo vínculo con el club destino.
+        Al aprobar: cierra los vínculos activos que sean de OTRA familia
+        de clubes (comportamiento de siempre: pasar a un club sin relación
+        cierra el vínculo anterior). Si la persona ya tenía un vínculo
+        activo en un club HERMANO del destino, se lo deja intacto y se
+        agrega el nuevo como vínculo adicional (así se cubre el caso de
+        jugadores de categorías menores que también integran el primer
+        equipo de la segunda entidad del mismo club).
         """
-        vinculo_anterior = self.persona.vinculos.filter(fecha_fin__isnull=True).first()
-        if vinculo_anterior:
-            vinculo_anterior.fecha_fin = self.fecha_resolucion or models.functions.Now()
-            vinculo_anterior.save()
+        fecha = self.fecha_resolucion or date.today()
+        vinculos_activos = list(self.persona.vinculos.filter(fecha_fin__isnull=True))
 
-        Vinculo.objects.create(
-            persona=self.persona,
-            club=self.club_destino,
-            categoria=self.categoria_destino,
-            fecha_inicio=self.fecha_resolucion or models.functions.Now(),
+        for v in vinculos_activos:
+            if not self.club_destino.es_hermano_de(v.club):
+                v.fecha_fin = fecha
+                v.save()
+
+        ya_tiene_este_vinculo = any(
+            v.club_id == self.club_destino.id and v.categoria_id == self.categoria_destino_id
+            and v.fecha_fin is None
+            for v in vinculos_activos
         )
+        if not ya_tiene_este_vinculo:
+            queda_algun_activo_previo = any(
+                v.fecha_fin is None and self.club_destino.es_hermano_de(v.club) for v in vinculos_activos
+            )
+            Vinculo.objects.create(
+                persona=self.persona,
+                club=self.club_destino,
+                categoria=self.categoria_destino,
+                fecha_inicio=fecha,
+                es_principal=not queda_algun_activo_previo,
+            )
 
         self.estado = "aprobado"
         self.resuelto_por = usuario_resuelve
@@ -288,6 +354,8 @@ class Torneo(models.Model):
     precio_derechos_federativos = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     precio_fondo_seleccion = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     precio_carnet = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    precio_jugador_libre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    precio_fichaje_nuevo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["-temporada", "nombre"]
@@ -351,6 +419,8 @@ class InscripcionTorneo(models.Model):
     derechos_federativos = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fondo_seleccion = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     carnet = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    jugador_libre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fichaje_nuevo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
     pagado = models.BooleanField(default=False, help_text="Marcar cuando el club efectivamente pagó.")
@@ -367,7 +437,8 @@ class InscripcionTorneo(models.Model):
 
     @property
     def monto_total(self):
-        return sum(v for v in [self.derechos_federativos, self.fondo_seleccion, self.carnet] if v is not None)
+        campos = [self.derechos_federativos, self.fondo_seleccion, self.carnet, self.jugador_libre, self.fichaje_nuevo]
+        return sum(v for v in campos if v is not None)
 
     def __str__(self):
         return f"{self.persona} — {self.torneo}"
@@ -504,6 +575,7 @@ class Notificacion(models.Model):
         help_text="Dejar vacío para enviar a todos los clubes.",
     )
     leida_por = models.ManyToManyField(Usuario, blank=True, related_name="notificaciones_leidas")
+    archivo = models.FileField(upload_to="notificaciones/", null=True, blank=True)
 
     creada_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="notificaciones_creadas")
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -565,3 +637,25 @@ class DocumentoInstitucional(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+# ---------------------------------------------------------------------
+# GOLEADORES
+# ---------------------------------------------------------------------
+
+class Gol(models.Model):
+    """Goles convertidos por un jugador en un partido puntual, para el ranking de goleadores."""
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="goles")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="goles")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, null=True, blank=True, related_name="goles")
+    fecha_partido = models.DateField()
+    cantidad = models.PositiveSmallIntegerField(default=1, help_text="Goles convertidos en ese partido")
+
+    cargado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="goles_cargados")
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_partido"]
+
+    def __str__(self):
+        return f"{self.persona} — {self.cantidad} gol(es) ({self.fecha_partido})"

@@ -81,7 +81,7 @@ def home(request):
 @user_passes_test(es_delegado)
 def nueva_solicitud(request):
     if request.method == "POST":
-        form = SolicitudPaseForm(request.POST, request.FILES)
+        form = SolicitudPaseForm(request.POST, request.FILES, club=request.user.club)
         if form.is_valid():
             documento = form.cleaned_data["documento"]
 
@@ -111,6 +111,7 @@ def nueva_solicitud(request):
 
             solicitud = SolicitudPase.objects.create(
                 tipo=form.cleaned_data["tipo"],
+                tipo_pase=form.cleaned_data.get("tipo_pase", ""),
                 persona=persona,
                 club_origen=club_origen,
                 club_destino=request.user.club,
@@ -135,7 +136,7 @@ def nueva_solicitud(request):
             messages.success(request, "Solicitud enviada. La federación la va a revisar.")
             return redirect("mis_solicitudes")
     else:
-        form = SolicitudPaseForm()
+        form = SolicitudPaseForm(club=request.user.club)
 
     return render(request, "federacion_app/nueva_solicitud.html", {"form": form})
 
@@ -329,16 +330,18 @@ def formulario_09(request, solicitud_id):
     elementos.append(tabla_conformidad)
     elementos.append(Spacer(1, 20))
 
+    modalidad_texto = solicitud.get_tipo_pase_display() if solicitud.tipo_pase else "DEFINITIVO - PRÉSTAMO (tachar lo que no corresponda)"
     estado_texto = ""
     if solicitud.estado == "aprobado":
         estado_texto = (
-            f"Visto la presentación realizada, se resuelve <b>APROBAR</b> el pase solicitado. "
+            f"Visto la presentación realizada, se resuelve <b>APROBAR</b> el pase solicitado en carácter de "
+            f"<b>{modalidad_texto.upper()}</b>. "
             f"Fecha de aprobación: {solicitud.fecha_resolucion.strftime('%d/%m/%Y') if solicitud.fecha_resolucion else ''}"
         )
     else:
         estado_texto = (
-            "Visto la presentación realizada, se resuelve APROBAR el pase solicitado en carácter de "
-            "DEFINITIVO - PRÉSTAMO (tachar lo que no corresponda)."
+            f"Visto la presentación realizada, se resuelve APROBAR el pase solicitado en carácter de "
+            f"{modalidad_texto.upper()}."
         )
     elementos.append(Paragraph("<b>Para uso de la FEDERACIÓN o COMISIÓN DE DEPORTES</b>", estilos["Normal"]))
     elementos.append(Spacer(1, 8))
@@ -828,6 +831,8 @@ def cobro_masivo(request):
                 "der_marcado": i.derechos_federativos is not None,
                 "fondo_marcado": i.fondo_seleccion is not None,
                 "carnet_marcado": i.carnet is not None,
+                "jugador_libre_marcado": i.jugador_libre is not None,
+                "fichaje_nuevo_marcado": i.fichaje_nuevo is not None,
             })
 
     if request.method == "POST" and torneo:
@@ -843,6 +848,12 @@ def cobro_masivo(request):
                 tocado = True
             if request.POST.get(f"carnet_{i.id}"):
                 i.carnet = torneo.precio_carnet
+                tocado = True
+            if request.POST.get(f"jugadorlibre_{i.id}"):
+                i.jugador_libre = torneo.precio_jugador_libre
+                tocado = True
+            if request.POST.get(f"fichajenuevo_{i.id}"):
+                i.fichaje_nuevo = torneo.precio_fichaje_nuevo
                 tocado = True
             if tocado:
                 i.estado = "cobrado"
@@ -899,6 +910,8 @@ def cobrar_inscripcion(request, inscripcion_id):
             inscripcion.derechos_federativos = form.cleaned_data["derechos_federativos"]
             inscripcion.fondo_seleccion = form.cleaned_data["fondo_seleccion"]
             inscripcion.carnet = form.cleaned_data["carnet"]
+            inscripcion.jugador_libre = form.cleaned_data["jugador_libre"]
+            inscripcion.fichaje_nuevo = form.cleaned_data["fichaje_nuevo"]
             inscripcion.estado = "cobrado"
             inscripcion.cobrado_por = request.user
             inscripcion.fecha_cobro = date.today()
@@ -910,6 +923,8 @@ def cobrar_inscripcion(request, inscripcion_id):
             "derechos_federativos": inscripcion.derechos_federativos,
             "fondo_seleccion": inscripcion.fondo_seleccion,
             "carnet": inscripcion.carnet,
+            "jugador_libre": inscripcion.jugador_libre,
+            "fichaje_nuevo": inscripcion.fichaje_nuevo,
         })
 
     return render(request, "federacion_app/cobrar_inscripcion.html", {
@@ -942,7 +957,7 @@ def planilla_partido(request):
     """
     club = request.user.club
     jugadores_club = Persona.objects.filter(
-        vinculos__club=club, vinculos__fecha_fin__isnull=True
+        vinculos__club=club, vinculos__fecha_fin__isnull=True, activo=True
     ).distinct().order_by("apellido")
     categorias = Categoria.objects.all().order_by("nombre")
 
@@ -1124,7 +1139,7 @@ def padron_excel(request):
         celda.font = Font(bold=True)
 
     for p in jugadores:
-        vinculo = p.vinculos.filter(fecha_fin__isnull=True).first()
+        vinculo = p.vinculos.filter(club=club_seleccionado, fecha_fin__isnull=True).first()
         ws.append([
             p.apellido, p.nombre, p.documento,
             vinculo.categoria.nombre if vinculo and vinculo.categoria else "",
@@ -1167,7 +1182,7 @@ def padron_pdf(request):
 
     datos = [["Apellido", "Nombre", "Documento", "Categoría", "Desde"]]
     for p in jugadores:
-        vinculo = p.vinculos.filter(fecha_fin__isnull=True).first()
+        vinculo = p.vinculos.filter(club=club_seleccionado, fecha_fin__isnull=True).first()
         datos.append([
             p.apellido, p.nombre, p.documento,
             vinculo.categoria.nombre if vinculo and vinculo.categoria else "—",
@@ -1212,11 +1227,52 @@ def ficha_persona(request, persona_id):
     tarjetas = persona.tarjetas.select_related("club", "torneo").order_by("-fecha_partido")
     sanciones = persona.sanciones.order_by("-fecha_generada")
     sanciones_disciplinarias = persona.sanciones_disciplinarias.order_by("-fecha_sancion")
+    clubes_activos = persona.vinculos_activos.order_by("-es_principal")
+
+    # El delegado puede subir/cambiar la foto solo de la gente de su propio club.
+    puede_editar_foto = (
+        request.user.rol == "delegado" and request.user.club and
+        persona.vinculos.filter(club=request.user.club, fecha_fin__isnull=True).exists()
+    )
 
     return render(request, "federacion_app/ficha_persona.html", {
         "persona": persona, "historial": historial, "edad": edad, "autorizacion": autorizacion,
         "tarjetas": tarjetas, "sanciones": sanciones, "sanciones_disciplinarias": sanciones_disciplinarias,
+        "puede_editar_foto": puede_editar_foto, "clubes_activos": clubes_activos,
     })
+
+
+@login_required
+def subir_foto_persona(request, persona_id):
+    """El delegado sube o cambia la foto de un jugador o técnico de su propio club."""
+    persona = get_object_or_404(Persona, id=persona_id)
+    tiene_permiso = (
+        request.user.rol == "delegado" and request.user.club and
+        persona.vinculos.filter(club=request.user.club, fecha_fin__isnull=True).exists()
+    ) or request.user.rol == "federacion"
+
+    if not tiene_permiso:
+        messages.error(request, "No tenés permiso para editar la foto de esta persona.")
+        return redirect("ficha_persona", persona_id=persona.id)
+
+    if request.method == "POST" and request.FILES.get("foto"):
+        persona.foto = request.FILES["foto"]
+        persona.save()
+        messages.success(request, "Foto actualizada.")
+    return redirect("ficha_persona", persona_id=persona.id)
+
+
+@login_required
+@user_passes_test(es_federacion)
+def alternar_activo_persona(request, persona_id):
+    """La federación activa o desactiva a un jugador (no puede ser seleccionado en planillas si está inactivo)."""
+    persona = get_object_or_404(Persona, id=persona_id)
+    if request.method == "POST":
+        persona.activo = not persona.activo
+        persona.save()
+        estado = "activado" if persona.activo else "desactivado"
+        messages.success(request, f"{persona} fue {estado}.")
+    return redirect("ficha_persona", persona_id=persona.id)
 
 
 @login_required
@@ -1377,7 +1433,7 @@ def formulario_12(request):
     if categoria:
         base = Persona.objects.filter(
             vinculos__club=club, vinculos__categoria=categoria, vinculos__fecha_fin__isnull=True
-        ).distinct()
+        ).exclude(tipo="jugador", activo=False).distinct()
         jugadores_qs = base.filter(tipo="jugador").order_by("apellido")
         tecnicos_qs = base.filter(tipo="tecnico").order_by("apellido")
 
@@ -2062,11 +2118,15 @@ def panel_disciplina(request):
     persona_elegida = Persona.objects.filter(id=persona_id).first() if persona_id else None
 
     if request.method == "POST":
+        from .models import Notificacion
+
         persona = get_object_or_404(Persona, id=request.POST.get("persona"))
         vinculo = persona.vinculos.filter(fecha_fin__isnull=True).first()
-        SancionDisciplinaria.objects.create(
+        club = vinculo.club if vinculo else None
+
+        sancion = SancionDisciplinaria.objects.create(
             persona=persona,
-            club=vinculo.club if vinculo else None,
+            club=club,
             motivo=request.POST.get("motivo", ""),
             informe=request.FILES.get("informe"),
             fecha_sancion=request.POST.get("fecha_sancion"),
@@ -2074,6 +2134,22 @@ def panel_disciplina(request):
             cantidad_anios=request.POST.get("cantidad_anios") or None,
             cargada_por=request.user,
         )
+
+        # Si se tildó, se manda además una notificación formal al club con
+        # la resolución/notificación adjunta (puede ser el mismo archivo
+        # del informe, o uno distinto si se subió aparte).
+        if request.POST.get("notificar_club") and club:
+            archivo_notificacion = request.FILES.get("archivo_notificacion") or request.FILES.get("informe")
+            if archivo_notificacion and hasattr(archivo_notificacion, "seek"):
+                archivo_notificacion.seek(0)
+            notificacion = Notificacion.objects.create(
+                titulo=request.POST.get("titulo_notificacion") or f"Resolución disciplinaria — {persona}",
+                mensaje=request.POST.get("mensaje_notificacion") or sancion.motivo,
+                archivo=archivo_notificacion,
+                creada_por=request.user,
+            )
+            notificacion.destinatarios.set([club])
+
         messages.success(request, f"Sanción disciplinaria cargada para {persona}.")
         return redirect("panel_disciplina")
 
@@ -2117,7 +2193,9 @@ def crear_notificacion(request):
         if not titulo or not mensaje:
             messages.error(request, "Completá título y mensaje.")
         else:
-            notificacion = Notificacion.objects.create(titulo=titulo, mensaje=mensaje, creada_por=request.user)
+            notificacion = Notificacion.objects.create(
+                titulo=titulo, mensaje=mensaje, archivo=request.FILES.get("archivo"), creada_por=request.user,
+            )
             if club_ids:
                 notificacion.destinatarios.set(club_ids)
             messages.success(request, "Notificación enviada.")
@@ -2226,3 +2304,75 @@ def institucional(request):
 
     documentos = DocumentoInstitucional.objects.all()
     return render(request, "federacion_app/institucional.html", {"documentos": documentos})
+
+
+# ---------------------------------------------------------------------
+# GOLEADORES
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def cargar_gol(request):
+    """La federación carga los goles de un jugador en un partido."""
+    from .models import Gol, Torneo
+
+    clubes = Club.objects.all().order_by("nombre")
+    torneos = Torneo.objects.filter(activo=True)
+    club_id = request.POST.get("club") or request.GET.get("club")
+    club_elegido = Club.objects.filter(id=club_id).first() if club_id else None
+
+    jugadores = []
+    if club_elegido:
+        jugadores = Persona.objects.filter(
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+        ).distinct().order_by("apellido")
+
+    if request.method == "POST" and request.POST.get("accion") == "cargar":
+        persona = get_object_or_404(Persona, id=request.POST.get("persona"))
+        Gol.objects.create(
+            persona=persona, club=club_elegido,
+            torneo_id=request.POST.get("torneo") or None,
+            fecha_partido=request.POST.get("fecha_partido"),
+            cantidad=request.POST.get("cantidad") or 1,
+            cargado_por=request.user,
+        )
+        messages.success(request, f"Gol(es) cargado(s) para {persona}.")
+        return redirect(f"/goleadores/cargar/?club={club_elegido.id}")
+
+    return render(request, "federacion_app/cargar_gol.html", {
+        "clubes": clubes, "torneos": torneos, "club_elegido": club_elegido, "jugadores": jugadores,
+    })
+
+
+@login_required
+def goleadores(request):
+    """Ranking de goleadores, filtrable por torneo y categoría. Ven todos los usuarios logueados."""
+    from collections import defaultdict
+    from .models import Gol, Torneo
+
+    torneos = Torneo.objects.all().order_by("-temporada")
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    torneo_id = request.GET.get("torneo")
+    categoria_id = request.GET.get("categoria")
+
+    goles = Gol.objects.select_related("persona", "club", "torneo")
+    if torneo_id:
+        goles = goles.filter(torneo_id=torneo_id)
+
+    acumulado = defaultdict(lambda: {"persona": None, "club": None, "total": 0})
+    for g in goles:
+        if categoria_id:
+            vinculo = g.persona.vinculos.filter(club=g.club, fecha_fin__isnull=True).first()
+            if not vinculo or str(vinculo.categoria_id) != categoria_id:
+                continue
+        acumulado[g.persona_id]["persona"] = g.persona
+        acumulado[g.persona_id]["club"] = g.club
+        acumulado[g.persona_id]["total"] += g.cantidad
+
+    ranking = sorted(acumulado.values(), key=lambda r: r["total"], reverse=True)
+
+    return render(request, "federacion_app/goleadores.html", {
+        "ranking": ranking, "torneos": torneos, "categorias": categorias,
+        "torneo_id": torneo_id, "categoria_id": categoria_id,
+    })

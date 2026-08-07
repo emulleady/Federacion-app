@@ -8,6 +8,9 @@
       <div class="avatar-grande-placeholder">{{ persona.nombre|first }}{{ persona.apellido|first }}</div>
     {% endif %}
     <div>
+      {% if not persona.activo %}
+        <span class="badge badge-rechazado" style="margin-bottom:6px; display:inline-block;">Jugador desactivado</span>
+      {% endif %}
       <h2 style="margin-bottom:4px;">{{ persona.apellido }}, {{ persona.nombre }}</h2>
       <p style="color:#6b7280; margin:0; display:flex; align-items:center; gap:8px;">
         Documento: {{ persona.documento }} · Club actual:
@@ -16,6 +19,14 @@
         {% endif %}
         {{ persona.club_actual|default:"sin club" }}
       </p>
+      {% if clubes_activos|length > 1 %}
+      <p style="color:#6b7280; margin:4px 0 0; font-size:13px;">
+        También activo en:
+        {% for v in clubes_activos %}
+          {% if not v.es_principal %}{{ v.club.nombre }}{% if v.categoria %} ({{ v.categoria.nombre }}){% endif %}{% if not forloop.last %}, {% endif %}{% endif %}
+        {% endfor %}
+      </p>
+      {% endif %}
       <p style="color:#6b7280; margin:4px 0 0;">
         Fecha de nacimiento: {{ persona.fecha_nacimiento|date:"d/m/Y" }}{% if edad %} · {{ edad }} años{% endif %}
       </p>
@@ -57,6 +68,23 @@
       {% endif %}
     </div>
   </div>
+
+  {% if puede_editar_foto %}
+  <form method="post" action="{% url 'subir_foto_persona' persona.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:8px; align-items:center;">
+    {% csrf_token %}
+    <input type="file" name="foto" accept="image/*" required style="font-size:12px;">
+    <button type="submit" style="padding:6px 12px; font-size:13px;">{% if persona.foto %}Cambiar foto{% else %}Subir foto{% endif %}</button>
+  </form>
+  {% endif %}
+
+  {% if user.rol == "federacion" %}
+  <form method="post" action="{% url 'alternar_activo_persona' persona.id %}" style="margin-top:10px;">
+    {% csrf_token %}
+    <button type="submit" style="{% if persona.activo %}background:#dc2626;{% else %}background:#16a34a;{% endif %} padding:6px 14px; font-size:13px;">
+      {% if persona.activo %}Desactivar jugador{% else %}Activar jugador{% endif %}
+    </button>
+  </form>
+  {% endif %}
 </div>
 
 <h3>Historial de clubes</h3>

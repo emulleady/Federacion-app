@@ -5,7 +5,7 @@ from .models import (
     Vinculo, SolicitudPase, DocumentoSolicitud, LogAuditoria,
     Torneo, InscripcionTorneo, PresentacionFormulario12,
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
-    Notificacion, DocumentoInstitucional, NotificacionAcuse,
+    Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol,
 )
 
 
@@ -19,7 +19,8 @@ class UsuarioAdmin(UserAdmin):
 
 @admin.register(Club)
 class ClubAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "codigo_afiliacion", "activo", "fecha_afiliacion", "vista_escudo")
+    list_display = ("nombre", "codigo_afiliacion", "club_madre", "activo", "fecha_afiliacion", "vista_escudo")
+    list_filter = ("club_madre",)
     search_fields = ("nombre", "codigo_afiliacion")
 
     def vista_escudo(self, obj):
@@ -82,7 +83,7 @@ class LogAuditoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Torneo)
 class TorneoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "temporada", "activo", "precio_derechos_federativos", "precio_fondo_seleccion", "precio_carnet")
+    list_display = ("nombre", "temporada", "activo", "precio_derechos_federativos", "precio_fondo_seleccion", "precio_carnet", "precio_jugador_libre", "precio_fichaje_nuevo")
     list_filter = ("activo",)
 
 
@@ -138,3 +139,10 @@ class DocumentoInstitucionalAdmin(admin.ModelAdmin):
 class NotificacionAcuseAdmin(admin.ModelAdmin):
     list_display = ("notificacion", "club", "fecha_acuse", "fecha_respuesta")
     list_filter = ("notificacion",)
+
+
+@admin.register(Gol)
+class GolAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "torneo", "fecha_partido", "cantidad")
+    list_filter = ("torneo",)
+    search_fields = ("persona__apellido", "persona__documento")

@@ -288,12 +288,13 @@
             {% if notificaciones_no_leidas_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ notificaciones_no_leidas_count }}</span>{% endif %}
           </a>
           <a href="{% url 'institucional' %}">Institucional</a>
+          <a href="{% url 'goleadores' %}">Goleadores</a>
         {% endif %}
         {% if user.rol == "federacion" %}
           <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
           <a href="{% url 'padron_club' %}">Padrón por club</a>
           <a href="{% url 'importar_excel' %}">Importar Excel</a>
-          <a href="{% url 'cobro_masivo' %}">Cobros de torneos</a>
+          <a href="{% url 'cobro_masivo' %}">Cobros</a>
           <a href="{% url 'presentaciones_formulario12' %}">Presentaciones Form. 12</a>
           <a href="{% url 'cargar_tarjeta' %}">Cargar tarjeta</a>
           <a href="{% url 'sanciones_pendientes' %}">Sanciones pendientes</a>
@@ -304,6 +305,8 @@
             {% if acuses_nuevos_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ acuses_nuevos_count }}</span>{% endif %}
           </a>
           <a href="{% url 'institucional' %}">Institucional</a>
+          <a href="{% url 'cargar_gol' %}">Cargar gol</a>
+          <a href="{% url 'goleadores' %}">Goleadores</a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>

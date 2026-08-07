@@ -1,6 +1,6 @@
 {% extends "federacion_app/base.html" %}
 {% block content %}
-<h2>Cobros de torneos</h2>
+<h2>Cobros</h2>
 <p style="margin-bottom:16px;"><a href="{% url 'historial_inscripciones' %}">Ver historial de cobros</a></p>
 
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
@@ -67,10 +67,10 @@
 </div>
 
 {% if torneo %}
-  {% if not torneo.precio_derechos_federativos and not torneo.precio_fondo_seleccion and not torneo.precio_carnet %}
+  {% if not torneo.precio_derechos_federativos and not torneo.precio_fondo_seleccion and not torneo.precio_carnet and not torneo.precio_jugador_libre and not torneo.precio_fichaje_nuevo %}
     <div class="mensaje" style="background:#fef2f2; border-left-color:#dc2626; color:#991b1b;">
       Este torneo todavía no tiene los precios cargados. Andá al admin → Torneos → {{ torneo }} y completá
-      "Precio derechos federativos", "Precio fondo de selección" y "Precio carnet" antes de cobrar.
+      los precios de cada concepto antes de cobrar.
     </div>
   {% endif %}
 
@@ -86,6 +86,8 @@
         <th>Derechos federativos (${{ torneo.precio_derechos_federativos|default:"0" }})</th>
         <th>Fondo de selección (${{ torneo.precio_fondo_seleccion|default:"0" }})</th>
         <th>Carnet (${{ torneo.precio_carnet|default:"0" }})</th>
+        <th>Jugador Libre (${{ torneo.precio_jugador_libre|default:"0" }})</th>
+        <th>Fichaje Nuevo (${{ torneo.precio_fichaje_nuevo|default:"0" }})</th>
         <th>Pago validado</th>
       </tr>
       {% for fila in filas %}
@@ -110,21 +112,35 @@
                  onchange="recalcular()">
         </td>
         <td style="text-align:center;">
+          <input type="checkbox" class="chk-jugadorlibre" name="jugadorlibre_{{ fila.inscripcion.id }}"
+                 data-monto="{{ torneo.precio_jugador_libre|default:0 }}"
+                 {% if fila.jugador_libre_marcado %}checked disabled{% endif %}
+                 onchange="recalcular()">
+        </td>
+        <td style="text-align:center;">
+          <input type="checkbox" class="chk-fichajenuevo" name="fichajenuevo_{{ fila.inscripcion.id }}"
+                 data-monto="{{ torneo.precio_fichaje_nuevo|default:0 }}"
+                 {% if fila.fichaje_nuevo_marcado %}checked disabled{% endif %}
+                 onchange="recalcular()">
+        </td>
+        <td style="text-align:center;">
           <input type="checkbox" name="validar_{{ fila.inscripcion.id }}">
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5">No hay inscripciones pendientes de cobro para este filtro.</td></tr>
+      <tr><td colspan="7">No hay inscripciones pendientes de cobro para este filtro.</td></tr>
       {% endfor %}
       <tr style="font-weight:700; background:#f9fafb;">
         <td>Suma del total</td>
         <td style="text-align:center;" id="total-der">$0</td>
         <td style="text-align:center;" id="total-fondo">$0</td>
         <td style="text-align:center;" id="total-carnet">$0</td>
+        <td style="text-align:center;" id="total-jugadorlibre">$0</td>
+        <td style="text-align:center;" id="total-fichajenuevo">$0</td>
         <td></td>
       </tr>
       <tr style="font-weight:700;">
-        <td colspan="3" style="text-align:right;">Suma de las tres columnas</td>
+        <td colspan="5" style="text-align:right;">Suma de todas las columnas</td>
         <td style="text-align:center;" id="total-general">$0</td>
         <td></td>
       </tr>
@@ -138,14 +154,19 @@
 
   <script>
     function recalcular() {
-      let totalDer = 0, totalFondo = 0, totalCarnet = 0;
-      document.querySelectorAll('.chk-der:checked').forEach(c => totalDer += parseFloat(c.dataset.monto || 0));
-      document.querySelectorAll('.chk-fondo:checked').forEach(c => totalFondo += parseFloat(c.dataset.monto || 0));
-      document.querySelectorAll('.chk-carnet:checked').forEach(c => totalCarnet += parseFloat(c.dataset.monto || 0));
-      document.getElementById('total-der').textContent = '$' + totalDer.toFixed(2);
-      document.getElementById('total-fondo').textContent = '$' + totalFondo.toFixed(2);
-      document.getElementById('total-carnet').textContent = '$' + totalCarnet.toFixed(2);
-      document.getElementById('total-general').textContent = '$' + (totalDer + totalFondo + totalCarnet).toFixed(2);
+      let totales = {der: 0, fondo: 0, carnet: 0, jugadorlibre: 0, fichajenuevo: 0};
+      document.querySelectorAll('.chk-der:checked').forEach(c => totales.der += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-fondo:checked').forEach(c => totales.fondo += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-carnet:checked').forEach(c => totales.carnet += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-jugadorlibre:checked').forEach(c => totales.jugadorlibre += parseFloat(c.dataset.monto || 0));
+      document.querySelectorAll('.chk-fichajenuevo:checked').forEach(c => totales.fichajenuevo += parseFloat(c.dataset.monto || 0));
+      document.getElementById('total-der').textContent = '$' + totales.der.toFixed(2);
+      document.getElementById('total-fondo').textContent = '$' + totales.fondo.toFixed(2);
+      document.getElementById('total-carnet').textContent = '$' + totales.carnet.toFixed(2);
+      document.getElementById('total-jugadorlibre').textContent = '$' + totales.jugadorlibre.toFixed(2);
+      document.getElementById('total-fichajenuevo').textContent = '$' + totales.fichajenuevo.toFixed(2);
+      const suma = totales.der + totales.fondo + totales.carnet + totales.jugadorlibre + totales.fichajenuevo;
+      document.getElementById('total-general').textContent = '$' + suma.toFixed(2);
     }
     recalcular();
   </script>

@@ -1,0 +1,42 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Tabla de goleadores</h2>
+
+<div class="card">
+  <form method="get" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:200px;">
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for t in torneos %}<option value="{{ t.id }}" {% if torneo_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Categoría</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for cat in categorias %}<option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+<table>
+  <tr>
+    <th style="width:60px;">#</th>
+    <th>Jugador</th>
+    <th>Club</th>
+    <th>Goles</th>
+  </tr>
+  {% for r in ranking %}
+  <tr>
+    <td>{{ forloop.counter }}</td>
+    <td><a href="{% url 'ficha_persona' r.persona.id %}">{{ r.persona }}</a></td>
+    <td>{{ r.club.nombre }}</td>
+    <td><strong>{{ r.total }}</strong></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">Todavía no hay goles cargados para este filtro.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -31,11 +31,19 @@ class SolicitudPaseForm(forms.ModelForm):
 
     class Meta:
         model = SolicitudPase
-        fields = ["tipo", "categoria_destino"]
+        fields = ["tipo", "tipo_pase", "categoria_destino"]
         labels = {
             "tipo": "Tipo de solicitud",
+            "tipo_pase": "Modalidad del pase (definitivo o préstamo)",
             "categoria_destino": "Categoría destino",
         }
+        widgets = {
+            "tipo_pase": forms.RadioSelect,
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.club_delegado = kwargs.pop("club", None)
+        super().__init__(*args, **kwargs)
 
     def clean(self):
         cleaned = super().clean()
@@ -45,17 +53,23 @@ class SolicitudPaseForm(forms.ModelForm):
         if documento:
             ya_existe = Persona.objects.filter(documento=documento).exists()
 
-            # Alta nueva con un DNI que ya está en el sistema: solo se bloquea
-            # si ese jugador tiene un club activo (ahí sí sería un duplicado
-            # real). Si quedó sin club — por ejemplo, porque una solicitud
-            # anterior fue rechazada — se permite volver a darlo de alta,
-            # para no dejar a nadie trabado sin poder hacer nada.
+            # Alta nueva con un DNI que ya está en el sistema: se bloquea
+            # solo si el club actual del jugador NO es hermano del club
+            # que está cargando la solicitud (ahí sí sería un duplicado
+            # real). Si es un club hermano (misma familia, ej: "Real
+            # Madrid" y "Real Madrid Azul"), se permite — un jugador
+            # puede tener varios clubes activos dentro de la misma familia.
             if tipo == "alta_nueva" and ya_existe:
                 persona_existente = Persona.objects.get(documento=documento)
-                if persona_existente.club_actual:
+                club_existente = persona_existente.club_actual
+                es_hermano = (
+                    club_existente and self.club_delegado and
+                    self.club_delegado.es_hermano_de(club_existente)
+                )
+                if club_existente and not es_hermano:
                     raise forms.ValidationError(
                         f"Ese documento ya está registrado a nombre de {persona_existente} "
-                        f"(club actual: {persona_existente.club_actual}). "
+                        f"(club actual: {club_existente}). "
                         f"Si necesitás sumarlo a tu club, usá 'Pase entre clubes' en vez de 'Alta de jugador nuevo'."
                     )
 
@@ -104,10 +118,12 @@ class InscripcionTorneoForm(forms.Form):
 
 
 class CobroInscripcionForm(forms.Form):
-    """La federación completa los tres conceptos al procesar la inscripción."""
+    """La federación completa los cinco conceptos al procesar la inscripción."""
     derechos_federativos = forms.DecimalField(label="Derechos federativos ($)", max_digits=10, decimal_places=2, required=False)
     fondo_seleccion = forms.DecimalField(label="Fondo de selección ($)", max_digits=10, decimal_places=2, required=False)
     carnet = forms.DecimalField(label="Carnet ($)", max_digits=10, decimal_places=2, required=False)
+    jugador_libre = forms.DecimalField(label="Jugador libre ($)", max_digits=10, decimal_places=2, required=False)
+    fichaje_nuevo = forms.DecimalField(label="Fichaje nuevo ($)", max_digits=10, decimal_places=2, required=False)
 
 
 class ImportarExcelForm(forms.Form):

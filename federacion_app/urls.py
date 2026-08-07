@@ -40,6 +40,8 @@ urlpatterns = [
     path("persona/<int:persona_id>/", views.ficha_persona, name="ficha_persona"),
     path("persona/<int:persona_id>/formulario-08/", views.formulario_08, name="formulario_08"),
     path("persona/<int:persona_id>/subir-autorizacion/", views.subir_autorizacion, name="subir_autorizacion"),
+    path("persona/<int:persona_id>/subir-foto/", views.subir_foto_persona, name="subir_foto_persona"),
+    path("persona/<int:persona_id>/alternar-activo/", views.alternar_activo_persona, name="alternar_activo_persona"),
     path("buscar/", views.buscar_persona, name="buscar_persona"),
 
     # Tarjetas y sanciones
@@ -61,4 +63,8 @@ urlpatterns = [
 
     # Institucional
     path("institucional/", views.institucional, name="institucional"),
+
+    # Goleadores
+    path("goleadores/cargar/", views.cargar_gol, name="cargar_gol"),
+    path("goleadores/", views.goleadores, name="goleadores"),
 ]
