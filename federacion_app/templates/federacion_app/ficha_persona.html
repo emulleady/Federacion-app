@@ -77,6 +77,14 @@
   </form>
   {% endif %}
 
+  {% if categoria_para_formulario_12 %}
+  <p style="margin-top:12px;">
+    <a href="{% url 'formulario_12' %}?categoria={{ categoria_para_formulario_12.id }}">
+      📄 Ir al Formulario 12 de {{ categoria_para_formulario_12.nombre }} (para inscribirlo a un torneo)
+    </a>
+  </p>
+  {% endif %}
+
   {% if user.rol == "federacion" %}
   <form method="post" action="{% url 'alternar_activo_persona' persona.id %}" style="margin-top:10px;">
     {% csrf_token %}

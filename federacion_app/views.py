@@ -187,6 +187,13 @@ def liberar_solicitud(request, solicitud_id):
         if accion == "liberar":
             nota = request.POST.get("nota_liberacion", "")
             solicitud.liberar(usuario_libera=request.user, nota=nota)
+
+            archivo_pase = request.FILES.get("formulario_pase_libre")
+            if archivo_pase:
+                DocumentoSolicitud.objects.create(
+                    solicitud=solicitud, archivo=archivo_pase, descripcion="Formulario de pase libre firmado"
+                )
+
             messages.success(request, f"Liberaste a {solicitud.persona}. Ahora la federación revisa el pase.")
         else:
             motivo = request.POST.get("motivo_rechazo", "")
@@ -455,7 +462,10 @@ def formulario_10(request, solicitud_id):
 
 def _filtrar_padron(request):
     """Lógica de filtro compartida entre la pantalla y las exportaciones."""
-    club_id = request.GET.get("club")
+    if request.user.rol == "delegado":
+        club_id = str(request.user.club_id) if request.user.club_id else None
+    else:
+        club_id = request.GET.get("club")
     categoria_id = request.GET.get("categoria")
     club_seleccionado = None
     categoria_seleccionada = None
@@ -1100,6 +1110,25 @@ def _generar_pdf_planilla(request, club):
 
 
 @login_required
+@user_passes_test(es_delegado)
+def mi_padron(request):
+    """El delegado ve el padrón completo de su propio club, filtrable por categoría."""
+    club = request.user.club
+    categorias = Categoria.objects.all().order_by("nombre")
+    categoria_id = request.GET.get("categoria")
+
+    jugadores = Persona.objects.filter(
+        vinculos__club=club, vinculos__fecha_fin__isnull=True, tipo="jugador"
+    ).distinct().order_by("apellido")
+    if categoria_id:
+        jugadores = jugadores.filter(vinculos__categoria_id=categoria_id, vinculos__fecha_fin__isnull=True)
+
+    return render(request, "federacion_app/mi_padron.html", {
+        "club": club, "categorias": categorias, "categoria_id": categoria_id, "jugadores": jugadores,
+    })
+
+
+@login_required
 @user_passes_test(es_federacion)
 def padron_club(request):
     """Lista los jugadores activos de un club elegido, con filtro opcional por categoría. Solo federación."""
@@ -1115,7 +1144,7 @@ def padron_club(request):
 
 
 @login_required
-@user_passes_test(es_federacion)
+@user_passes_test(lambda u: u.rol in ("federacion", "delegado"))
 def padron_excel(request):
     import openpyxl
     from openpyxl.styles import Font
@@ -1158,7 +1187,7 @@ def padron_excel(request):
 
 
 @login_required
-@user_passes_test(es_federacion)
+@user_passes_test(lambda u: u.rol in ("federacion", "delegado"))
 def padron_pdf(request):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -1235,10 +1264,19 @@ def ficha_persona(request, persona_id):
         persona.vinculos.filter(club=request.user.club, fecha_fin__isnull=True).exists()
     )
 
+    # Si es un delegado y el jugador es suyo, guardamos la categoría para armar
+    # el acceso directo al Formulario 12 (ya con torneo/categoría precargados).
+    categoria_para_formulario_12 = None
+    if puede_editar_foto and persona.tipo == "jugador":
+        vinculo_propio = persona.vinculos.filter(club=request.user.club, fecha_fin__isnull=True).first()
+        if vinculo_propio:
+            categoria_para_formulario_12 = vinculo_propio.categoria
+
     return render(request, "federacion_app/ficha_persona.html", {
         "persona": persona, "historial": historial, "edad": edad, "autorizacion": autorizacion,
         "tarjetas": tarjetas, "sanciones": sanciones, "sanciones_disciplinarias": sanciones_disciplinarias,
         "puede_editar_foto": puede_editar_foto, "clubes_activos": clubes_activos,
+        "categoria_para_formulario_12": categoria_para_formulario_12,
     })
 
 
@@ -2373,6 +2411,79 @@ def goleadores(request):
     ranking = sorted(acumulado.values(), key=lambda r: r["total"], reverse=True)
 
     return render(request, "federacion_app/goleadores.html", {
+        "ranking": ranking, "torneos": torneos, "categorias": categorias,
+        "torneo_id": torneo_id, "categoria_id": categoria_id,
+    })
+
+
+# ---------------------------------------------------------------------
+# VALLA MENOS VENCIDA
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def cargar_gol_recibido(request):
+    """La federación carga los goles recibidos por un jugador (arquero) en un partido."""
+    from .models import GolRecibido, Torneo
+
+    clubes = Club.objects.all().order_by("nombre")
+    torneos = Torneo.objects.filter(activo=True)
+    club_id = request.POST.get("club") or request.GET.get("club")
+    club_elegido = Club.objects.filter(id=club_id).first() if club_id else None
+
+    jugadores = []
+    if club_elegido:
+        jugadores = Persona.objects.filter(
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+        ).distinct().order_by("apellido")
+
+    if request.method == "POST" and request.POST.get("accion") == "cargar":
+        persona = get_object_or_404(Persona, id=request.POST.get("persona"))
+        GolRecibido.objects.create(
+            persona=persona, club=club_elegido,
+            torneo_id=request.POST.get("torneo") or None,
+            fecha_partido=request.POST.get("fecha_partido"),
+            cantidad=request.POST.get("cantidad") or 1,
+            cargado_por=request.user,
+        )
+        messages.success(request, f"Gol(es) recibido(s) cargado(s) para {persona}.")
+        return redirect(f"/valla-menos-vencida/cargar/?club={club_elegido.id}")
+
+    return render(request, "federacion_app/cargar_gol_recibido.html", {
+        "clubes": clubes, "torneos": torneos, "club_elegido": club_elegido, "jugadores": jugadores,
+    })
+
+
+@login_required
+def valla_menos_vencida(request):
+    """Ranking de valla menos vencida (menos goles recibidos), filtrable por torneo y categoría."""
+    from collections import defaultdict
+    from .models import GolRecibido, Torneo
+
+    torneos = Torneo.objects.all().order_by("-temporada")
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    torneo_id = request.GET.get("torneo")
+    categoria_id = request.GET.get("categoria")
+
+    goles = GolRecibido.objects.select_related("persona", "club", "torneo")
+    if torneo_id:
+        goles = goles.filter(torneo_id=torneo_id)
+
+    acumulado = defaultdict(lambda: {"persona": None, "club": None, "total": 0})
+    for g in goles:
+        if categoria_id:
+            vinculo = g.persona.vinculos.filter(club=g.club, fecha_fin__isnull=True).first()
+            if not vinculo or str(vinculo.categoria_id) != categoria_id:
+                continue
+        acumulado[g.persona_id]["persona"] = g.persona
+        acumulado[g.persona_id]["club"] = g.club
+        acumulado[g.persona_id]["total"] += g.cantidad
+
+    # Menos goles recibidos primero (a diferencia del ranking de goleadores).
+    ranking = sorted(acumulado.values(), key=lambda r: r["total"])
+
+    return render(request, "federacion_app/valla_menos_vencida.html", {
         "ranking": ranking, "torneos": torneos, "categorias": categorias,
         "torneo_id": torneo_id, "categoria_id": categoria_id,
     })

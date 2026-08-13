@@ -31,6 +31,7 @@ urlpatterns = [
     path("torneos/inscripciones/historial/", views.historial_inscripciones, name="historial_inscripciones"),
     path("torneos/cobrar/<int:inscripcion_id>/", views.cobrar_inscripcion, name="cobrar_inscripcion"),
     path("torneos/pagado/<int:inscripcion_id>/", views.marcar_pagado, name="marcar_pagado"),
+    path("mi-padron/", views.mi_padron, name="mi_padron"),
     path("padron/", views.padron_club, name="padron_club"),
     path("padron/excel/", views.padron_excel, name="padron_excel"),
     path("padron/pdf/", views.padron_pdf, name="padron_pdf"),
@@ -67,4 +68,8 @@ urlpatterns = [
     # Goleadores
     path("goleadores/cargar/", views.cargar_gol, name="cargar_gol"),
     path("goleadores/", views.goleadores, name="goleadores"),
+
+    # Valla menos vencida
+    path("valla-menos-vencida/cargar/", views.cargar_gol_recibido, name="cargar_gol_recibido"),
+    path("valla-menos-vencida/", views.valla_menos_vencida, name="valla_menos_vencida"),
 ]

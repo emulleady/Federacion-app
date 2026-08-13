@@ -5,11 +5,15 @@
   <p><strong>Tipo de solicitud:</strong> {{ solicitud.get_tipo_display }}</p>
   <p><strong>Categoría destino:</strong> {{ solicitud.categoria_destino|default:"—" }}</p>
 
-  <form method="post">
+  <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <p>
       <label>Nota para la federación y el club destino (opcional — ej: valor del pase, condiciones)</label>
       <textarea name="nota_liberacion" rows="3"></textarea>
+    </p>
+    <p>
+      <label>Formulario de pase libre firmado (opcional, solo si vas a liberar)</label>
+      <input type="file" name="formulario_pase_libre">
     </p>
     <button type="submit" name="accion" value="liberar">Liberar jugador</button>
     <button type="submit" name="accion" value="rechazar">Rechazar</button>

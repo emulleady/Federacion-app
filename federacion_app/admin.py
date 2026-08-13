@@ -5,7 +5,7 @@ from .models import (
     Vinculo, SolicitudPase, DocumentoSolicitud, LogAuditoria,
     Torneo, InscripcionTorneo, PresentacionFormulario12,
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
-    Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol,
+    Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol, GolRecibido,
 )
 
 
@@ -143,6 +143,13 @@ class NotificacionAcuseAdmin(admin.ModelAdmin):
 
 @admin.register(Gol)
 class GolAdmin(admin.ModelAdmin):
+    list_display = ("persona", "club", "torneo", "fecha_partido", "cantidad")
+    list_filter = ("torneo",)
+    search_fields = ("persona__apellido", "persona__documento")
+
+
+@admin.register(GolRecibido)
+class GolRecibidoAdmin(admin.ModelAdmin):
     list_display = ("persona", "club", "torneo", "fecha_partido", "cantidad")
     list_filter = ("torneo",)
     search_fields = ("persona__apellido", "persona__documento")

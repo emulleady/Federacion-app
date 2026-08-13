@@ -271,6 +271,7 @@
       </div>
       <div class="links">
         {% if user.rol == "delegado" %}
+          <a href="{% url 'mi_padron' %}">Mi Padrón</a>
           <a href="{% url 'nueva_solicitud' %}">Nueva solicitud</a>
           <a href="{% url 'mis_solicitudes' %}">Mis solicitudes</a>
           <a href="{% url 'solicitudes_a_liberar' %}">Me piden jugadores</a>
@@ -289,6 +290,7 @@
           </a>
           <a href="{% url 'institucional' %}">Institucional</a>
           <a href="{% url 'goleadores' %}">Goleadores</a>
+          <a href="{% url 'valla_menos_vencida' %}">Valla menos vencida</a>
         {% endif %}
         {% if user.rol == "federacion" %}
           <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
@@ -307,6 +309,8 @@
           <a href="{% url 'institucional' %}">Institucional</a>
           <a href="{% url 'cargar_gol' %}">Cargar gol</a>
           <a href="{% url 'goleadores' %}">Goleadores</a>
+          <a href="{% url 'cargar_gol_recibido' %}">Cargar goles recibidos</a>
+          <a href="{% url 'valla_menos_vencida' %}">Valla menos vencida</a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>

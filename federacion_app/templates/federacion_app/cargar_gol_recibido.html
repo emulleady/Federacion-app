@@ -1,0 +1,50 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Cargar goles recibidos</h2>
+  <form method="get" style="margin-bottom:16px; max-width:300px;">
+    <label>Club</label>
+    <select name="club" onchange="this.form.submit()">
+      <option value="">— Seleccionar —</option>
+      {% for c in clubes %}
+        <option value="{{ c.id }}" {% if club_elegido.id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if club_elegido %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="cargar">
+    <input type="hidden" name="club" value="{{ club_elegido.id }}">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:600px;">
+      <div>
+        <label>Jugador (arquero)</label>
+        <select name="persona" required>
+          <option value="">— Seleccionar —</option>
+          {% for p in jugadores %}
+            <option value="{{ p.id }}">{{ p.apellido }}, {{ p.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Cantidad de goles recibidos en el partido</label>
+        <input type="number" name="cantidad" value="1" min="0" required>
+      </div>
+      <div>
+        <label>Fecha del partido</label>
+        <input type="date" name="fecha_partido" required>
+      </div>
+      <div>
+        <label>Torneo (opcional)</label>
+        <select name="torneo">
+          <option value="">—</option>
+          {% for t in torneos %}<option value="{{ t.id }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <button type="submit" style="margin-top:16px;">Cargar goles recibidos</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

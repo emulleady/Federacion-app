@@ -1,0 +1,52 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+  <h2 style="margin:0; display:flex; align-items:center; gap:10px;">
+    {% if club.escudo %}
+      <img src="{{ club.escudo.url }}" style="width:48px; height:48px; object-fit:contain;">
+    {% endif %}
+    Padrón de {{ club.nombre }} ({{ jugadores|length }})
+  </h2>
+  <div>
+    <a href="{% url 'padron_excel' %}?{% if categoria_id %}categoria={{ categoria_id }}{% endif %}" style="margin-right:14px;">⬇ Excel</a>
+    <a href="{% url 'padron_pdf' %}?{% if categoria_id %}categoria={{ categoria_id }}{% endif %}">⬇ PDF</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" style="max-width:300px;">
+    <label>Filtrar por categoría</label>
+    <select name="categoria" onchange="this.form.submit()">
+      <option value="">Todas</option>
+      {% for cat in categorias %}
+        <option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<table>
+  <tr>
+    <th style="width:56px;"></th>
+    <th>Jugador</th>
+    <th>Documento</th>
+    <th>Carnet</th>
+  </tr>
+  {% for p in jugadores %}
+  <tr>
+    <td>
+      {% if p.foto %}
+        <img src="{{ p.foto.url }}" class="avatar" alt="" style="margin-right:0;">
+      {% else %}
+        <div class="avatar-placeholder" style="margin-right:0;">{{ p.nombre|first }}{{ p.apellido|first }}</div>
+      {% endif %}
+    </td>
+    <td><a href="{% url 'ficha_persona' p.id %}">{{ p.apellido }}, {{ p.nombre }}</a></td>
+    <td>{{ p.documento }}</td>
+    <td>{{ p.numero_carnet|default:"—" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="4">No hay jugadores cargados{% if categoria_id %} en esta categoría{% endif %} todavía.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

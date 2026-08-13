@@ -659,3 +659,21 @@ class Gol(models.Model):
 
     def __str__(self):
         return f"{self.persona} — {self.cantidad} gol(es) ({self.fecha_partido})"
+
+
+class GolRecibido(models.Model):
+    """Goles recibidos por un arquero/jugador en un partido, para el ranking de valla menos vencida."""
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="goles_recibidos")
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="goles_recibidos")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, null=True, blank=True, related_name="goles_recibidos")
+    fecha_partido = models.DateField()
+    cantidad = models.PositiveSmallIntegerField(default=1, help_text="Goles recibidos en ese partido")
+
+    cargado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="goles_recibidos_cargados")
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha_partido"]
+
+    def __str__(self):
+        return f"{self.persona} — {self.cantidad} gol(es) recibido(s) ({self.fecha_partido})"
