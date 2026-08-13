@@ -1,76 +1,94 @@
 {% extends "federacion_app/base.html" %}
+{% load static %}
 {% block content %}
-<div class="card">
-  <div class="encabezado-persona">
-    {% if persona.foto %}
-      <img src="{{ persona.foto.url }}" class="avatar-grande" alt="{{ persona }}">
-    {% else %}
-      <div class="avatar-grande-placeholder">{{ persona.nombre|first }}{{ persona.apellido|first }}</div>
-    {% endif %}
-    <div>
-      {% if not persona.activo %}
-        <span class="badge badge-rechazado" style="margin-bottom:6px; display:inline-block;">Jugador desactivado</span>
-      {% endif %}
-      <h2 style="margin-bottom:4px;">{{ persona.apellido }}, {{ persona.nombre }}</h2>
-      <p style="color:#6b7280; margin:0; display:flex; align-items:center; gap:8px;">
-        Documento: {{ persona.documento }} · Club actual:
-        {% if persona.club_actual.escudo %}
-          <img src="{{ persona.club_actual.escudo.url }}" style="width:32px; height:32px; object-fit:contain;">
-        {% endif %}
-        {{ persona.club_actual|default:"sin club" }}
-      </p>
-      {% if clubes_activos|length > 1 %}
-      <p style="color:#6b7280; margin:4px 0 0; font-size:13px;">
-        También activo en:
-        {% for v in clubes_activos %}
-          {% if not v.es_principal %}{{ v.club.nombre }}{% if v.categoria %} ({{ v.categoria.nombre }}){% endif %}{% if not forloop.last %}, {% endif %}{% endif %}
-        {% endfor %}
-      </p>
-      {% endif %}
-      <p style="color:#6b7280; margin:4px 0 0;">
-        Fecha de nacimiento: {{ persona.fecha_nacimiento|date:"d/m/Y" }}{% if edad %} · {{ edad }} años{% endif %}
-      </p>
-      <p style="color:#6b7280; margin:4px 0 0;">
-        {% if persona.numero_carnet %}
-          Carnet N°: {{ persona.numero_carnet }}
-        {% elif persona.requiere_carnet %}
-          <span class="badge badge-pendiente">Carnet pendiente de tramitar</span>
-        {% else %}
-          Sin carnet cargado
-        {% endif %}
-      </p>
-      {% if edad and edad < 18 %}
-      <p style="margin:8px 0 0;">
-        <a href="{% url 'formulario_08' persona.id %}" target="_blank">📄 Descargar Formulario 08 (Autorización de fichaje — menor de edad)</a>
-      </p>
-      <div style="margin-top:8px;">
-        {% if autorizacion %}
-          <span class="badge badge-aprobado">✓ Autorización firmada subida</span>
-          <a href="{{ autorizacion.archivo.url }}" target="_blank" style="margin-left:8px; font-size:13px;">Ver archivo</a>
-        {% else %}
-          <span class="badge badge-pendiente">Falta subir la autorización firmada</span>
-        {% endif %}
-        <form method="post" action="{% url 'subir_autorizacion' persona.id %}" enctype="multipart/form-data" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
-          {% csrf_token %}
-          <input type="file" name="archivo" required style="font-size:12px;">
-          <button type="submit" style="padding:6px 12px; font-size:13px;">Subir firmada</button>
-        </form>
-      </div>
-      {% endif %}
+
+<div style="display:flex; justify-content:center; margin-bottom:20px;">
+  <div style="width:700px; max-width:100%; min-height:320px; background:white; border-radius:22px; box-shadow:0 10px 30px rgba(15,42,74,0.3); position:relative; overflow:hidden; display:flex;">
+
+    <!-- Franja naranja lateral -->
+    <div style="width:64px; flex-shrink:0; background:linear-gradient(180deg,#f97316,#ea580c); display:flex; flex-direction:column; align-items:center; padding:20px 0; gap:10px; position:relative;">
+      <div style="width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; color:white; font-size:16px; font-weight:900;">❯</div>
+      <p style="writing-mode:vertical-rl; transform:rotate(180deg); margin:0; color:white; font-size:11px; font-weight:700; letter-spacing:0.1em;">CREDENCIAL OFICIAL</p>
+      <div style="flex:1;"></div>
     </div>
-    <div style="margin-left:auto; display:flex; align-items:center; justify-content:center; width:130px; height:130px; flex-shrink:0;">
-      {% if persona.club_actual.escudo %}
-        <img src="{{ persona.club_actual.escudo.url }}" style="max-width:130px; max-height:130px; object-fit:contain;">
-      {% else %}
-        <div style="width:130px; height:130px; border-radius:12px; background:#f4f6f9; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-weight:600; font-size:13px; text-align:center;">
-          SIN CLUB
+
+    <!-- Contenido principal -->
+    <div style="flex:1; display:flex; flex-direction:column;">
+
+      <div style="padding:22px 24px 10px; display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          {% if not persona.activo %}
+            <span class="badge badge-rechazado" style="margin-bottom:6px; display:inline-block;">Jugador desactivado</span>
+          {% endif %}
+          <p style="margin:0 0 6px; color:#f97316; font-size:24px; font-weight:800; letter-spacing:0.02em;">
+            {% if persona.tipo == "jugador" %}JUGADOR{% else %}{{ persona.get_rol_tecnico_display|default:"CUERPO TÉCNICO"|upper }}{% endif %}
+          </p>
+          <p style="margin:0; color:#111827; font-size:22px; font-weight:800; line-height:1.2;">{{ persona.apellido }} {{ persona.nombre }}</p>
+          <p style="margin:6px 0 0; color:#374151; font-size:15px; font-weight:600;">{{ persona.documento }} DNI</p>
+          {% if persona.fecha_nacimiento %}
+          <p style="margin:2px 0 0; color:#374151; font-size:15px; font-weight:600;">{{ persona.fecha_nacimiento|date:"d/m/Y" }}{% if edad %} · {{ edad }} años{% endif %}</p>
+          {% endif %}
+          <p style="margin:6px 0 0; color:#374151; font-size:16px; font-weight:600; display:flex; align-items:center; gap:6px;">
+            Club actual:
+            {% if persona.club_actual.escudo %}<img src="{{ persona.club_actual.escudo.url }}" style="width:24px; height:24px; object-fit:contain;">{% endif %}
+            {{ persona.club_actual|default:"sin club" }}
+          </p>
+          {% if clubes_activos|length > 1 %}
+          <p style="margin:2px 0 0; color:#6b7280; font-size:12px;">
+            También activo en:
+            {% for v in clubes_activos %}{% if not v.es_principal %}{{ v.club.nombre }}{% if v.categoria %} ({{ v.categoria.nombre }}){% endif %}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}
+          </p>
+          {% endif %}
+          {% if not persona.numero_carnet and persona.requiere_carnet %}
+          <p style="margin:6px 0 0;"><span class="badge badge-pendiente">Carnet pendiente de tramitar</span></p>
+          {% endif %}
         </div>
-      {% endif %}
+        {% if persona.foto %}
+          <img src="{{ persona.foto.url }}" style="width:135px; height:160px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb; flex-shrink:0; margin-left:14px;">
+        {% else %}
+          <div style="width:135px; height:160px; border-radius:8px; background:#f4f6f9; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-size:34px; font-weight:700; color:#9ca3af; flex-shrink:0; margin-left:14px;">
+            {{ persona.nombre|first }}{{ persona.apellido|first }}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Franja azul diagonal, estilo escudo -->
+      <div style="flex:1; background:linear-gradient(120deg,#16385e 0%, #0f2a4a 55%, #0f2a4a 100%); clip-path:polygon(0 35%, 100% 0, 100% 100%, 0% 100%); margin-top:auto; padding:16px 24px; display:flex; align-items:flex-end; justify-content:space-between; gap:14px;">
+        <p style="margin:0; color:white; font-size:19px; font-weight:800; line-height:1.25; max-width:280px;">
+          FEDERACIÓN FUEGUINA<br>DE FÚTBOL DE SALÓN
+        </p>
+        <div style="text-align:center; flex-shrink:0;">
+          <p style="margin:0; color:rgba(255,255,255,0.75); font-size:10px; letter-spacing:0.08em; text-transform:uppercase;">N° de carnet</p>
+          <p style="margin:0; color:white; font-size:26px; font-weight:800; letter-spacing:0.03em;">{{ persona.numero_carnet|default:"—" }}</p>
+        </div>
+        <img src="{% static 'federacion_app/logo.png' %}" style="width:72px; height:72px; object-fit:contain; flex-shrink:0;">
+      </div>
     </div>
   </div>
+</div>
+
+<div class="card">
+  {% if edad and edad < 18 %}
+  <p style="margin:0 0 8px;">
+    <a href="{% url 'formulario_08' persona.id %}" target="_blank">📄 Descargar Formulario 08 (Autorización de fichaje — menor de edad)</a>
+  </p>
+  <div style="margin-bottom:14px;">
+    {% if autorizacion %}
+      <span class="badge badge-aprobado">✓ Autorización firmada subida</span>
+      <a href="{{ autorizacion.archivo.url }}" target="_blank" style="margin-left:8px; font-size:13px;">Ver archivo</a>
+    {% else %}
+      <span class="badge badge-pendiente">Falta subir la autorización firmada</span>
+    {% endif %}
+    <form method="post" action="{% url 'subir_autorizacion' persona.id %}" enctype="multipart/form-data" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+      {% csrf_token %}
+      <input type="file" name="archivo" required style="font-size:12px;">
+      <button type="submit" style="padding:6px 12px; font-size:13px;">Subir firmada</button>
+    </form>
+  </div>
+  {% endif %}
 
   {% if puede_editar_foto %}
-  <form method="post" action="{% url 'subir_foto_persona' persona.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:8px; align-items:center;">
+  <form method="post" action="{% url 'subir_foto_persona' persona.id %}" enctype="multipart/form-data" style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
     {% csrf_token %}
     <input type="file" name="foto" accept="image/*" required style="font-size:12px;">
     <button type="submit" style="padding:6px 12px; font-size:13px;">{% if persona.foto %}Cambiar foto{% else %}Subir foto{% endif %}</button>
@@ -78,7 +96,7 @@
   {% endif %}
 
   {% if categoria_para_formulario_12 %}
-  <p style="margin-top:12px;">
+  <p style="margin:0 0 10px;">
     <a href="{% url 'formulario_12' %}?categoria={{ categoria_para_formulario_12.id }}">
       📄 Ir al Formulario 12 de {{ categoria_para_formulario_12.nombre }} (para inscribirlo a un torneo)
     </a>
@@ -86,7 +104,7 @@
   {% endif %}
 
   {% if user.rol == "federacion" %}
-  <form method="post" action="{% url 'alternar_activo_persona' persona.id %}" style="margin-top:10px;">
+  <form method="post" action="{% url 'alternar_activo_persona' persona.id %}">
     {% csrf_token %}
     <button type="submit" style="{% if persona.activo %}background:#dc2626;{% else %}background:#16a34a;{% endif %} padding:6px 14px; font-size:13px;">
       {% if persona.activo %}Desactivar jugador{% else %}Activar jugador{% endif %}
