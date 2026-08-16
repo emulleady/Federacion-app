@@ -40,11 +40,14 @@
         presentado el {{ p.fecha_creacion|date:"d/m/Y" }}
       </p>
     </div>
-    {% if p.archivo_firmado %}
-      <a href="{{ p.archivo_firmado.url }}" target="_blank">📄 Ver formulario firmado</a>
-    {% else %}
-      <span class="badge badge-pendiente">Sin firmar todavía</span>
-    {% endif %}
+    <div style="text-align:right;">
+      <p style="margin:0 0 6px;"><a href="{% url 'ver_formulario12_presentacion' p.id %}" target="_blank">📄 Ver Formulario 12 generado</a></p>
+      {% if p.archivo_firmado %}
+        <a href="{{ p.archivo_firmado.url }}" target="_blank">✓ Ver formulario firmado</a>
+      {% else %}
+        <span class="badge badge-pendiente">Sin firmar todavía</span>
+      {% endif %}
+    </div>
   </div>
 
   {% if fila.menores_sin_autorizacion %}

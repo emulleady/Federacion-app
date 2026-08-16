@@ -136,7 +136,20 @@ def nueva_solicitud(request):
             messages.success(request, "Solicitud enviada. La federación la va a revisar.")
             return redirect("mis_solicitudes")
     else:
-        form = SolicitudPaseForm(club=request.user.club)
+        initial = {}
+        if request.GET.get("documento"):
+            initial["documento"] = request.GET["documento"]
+        if request.GET.get("tipo"):
+            initial["tipo"] = request.GET["tipo"]
+        if request.GET.get("nombre"):
+            initial["nombre"] = request.GET["nombre"]
+        if request.GET.get("apellido"):
+            initial["apellido"] = request.GET["apellido"]
+        if request.GET.get("fecha_nacimiento"):
+            initial["fecha_nacimiento"] = request.GET["fecha_nacimiento"]
+        if request.GET.get("numero_carnet"):
+            initial["numero_carnet"] = request.GET["numero_carnet"]
+        form = SolicitudPaseForm(club=request.user.club, initial=initial)
 
     return render(request, "federacion_app/nueva_solicitud.html", {"form": form})
 
@@ -1272,11 +1285,19 @@ def ficha_persona(request, persona_id):
         if vinculo_propio:
             categoria_para_formulario_12 = vinculo_propio.categoria
 
+    # Si el delegado ve a un jugador que todavía no es suyo, le damos un
+    # acceso directo para pedirlo (pase), sin tener que anotar el documento.
+    puede_pedir_jugador = (
+        request.user.rol == "delegado" and request.user.club and persona.tipo == "jugador" and
+        not puede_editar_foto
+    )
+
     return render(request, "federacion_app/ficha_persona.html", {
         "persona": persona, "historial": historial, "edad": edad, "autorizacion": autorizacion,
         "tarjetas": tarjetas, "sanciones": sanciones, "sanciones_disciplinarias": sanciones_disciplinarias,
         "puede_editar_foto": puede_editar_foto, "clubes_activos": clubes_activos,
         "categoria_para_formulario_12": categoria_para_formulario_12,
+        "puede_pedir_jugador": puede_pedir_jugador,
     })
 
 
@@ -1311,6 +1332,193 @@ def alternar_activo_persona(request, persona_id):
         estado = "activado" if persona.activo else "desactivado"
         messages.success(request, f"{persona} fue {estado}.")
     return redirect("ficha_persona", persona_id=persona.id)
+
+
+@login_required
+@user_passes_test(es_federacion)
+def imprimir_carnet(request, persona_id):
+    """Genera en PDF el carnet provisorio del jugador, con el mismo diseño que se ve en la ficha."""
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.lib.colors import HexColor, white
+    from django.contrib.staticfiles import finders
+    from django.http import HttpResponse
+    import io
+
+    persona = get_object_or_404(Persona, id=persona_id)
+
+    edad = None
+    if persona.fecha_nacimiento:
+        hoy = date.today()
+        edad = hoy.year - persona.fecha_nacimiento.year - (
+            (hoy.month, hoy.day) < (persona.fecha_nacimiento.month, persona.fecha_nacimiento.day)
+        )
+
+    NARANJA = HexColor("#f97316")
+    NARANJA_OSCURO = HexColor("#ea580c")
+    NAVY = HexColor("#0f2a4a")
+    NAVY_CLARO = HexColor("#16385e")
+    GRIS = HexColor("#374151")
+
+    buffer = io.BytesIO()
+    ancho_pagina, alto_pagina = A4
+    c = canvas.Canvas(buffer, pagesize=A4)
+
+    # --- Tamaño y posición de la tarjeta, centrada arriba de la hoja ---
+    ancho_carnet = 17 * cm
+    alto_carnet = 8.6 * cm
+    x0 = (ancho_pagina - ancho_carnet) / 2
+    y0 = alto_pagina - 3 * cm - alto_carnet
+
+    radio = 0.5 * cm
+
+    # Fondo blanco redondeado
+    c.setFillColor(white)
+    c.roundRect(x0, y0, ancho_carnet, alto_carnet, radio, fill=1, stroke=0)
+
+    # --- Franja naranja lateral (fondo, sin el ícono/texto todavía) ---
+    ancho_franja = 1.6 * cm
+    c.saveState()
+    p = c.beginPath()
+    p.moveTo(x0 + radio, y0)
+    p.lineTo(x0 + ancho_franja, y0)
+    p.lineTo(x0 + ancho_franja, y0 + alto_carnet)
+    p.lineTo(x0 + radio, y0 + alto_carnet)
+    p.arcTo(x0, y0 + alto_carnet - 2 * radio, x0 + 2 * radio, y0 + alto_carnet, startAng=90, extent=90)
+    p.lineTo(x0, y0 + radio)
+    p.arcTo(x0, y0, x0 + 2 * radio, y0 + 2 * radio, startAng=180, extent=90)
+    p.close()
+    c.setFillColor(NARANJA)
+    c.drawPath(p, fill=1, stroke=0)
+    c.restoreState()
+
+    # --- Contenido principal ---
+    x_contenido = x0 + ancho_franja + 0.7 * cm
+    y_cursor = y0 + alto_carnet - 1.1 * cm
+
+    tipo_texto = "JUGADOR" if persona.tipo == "jugador" else (persona.get_rol_tecnico_display() or "CUERPO TÉCNICO").upper()
+    c.setFillColor(NARANJA)
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(x_contenido, y_cursor, tipo_texto)
+
+    y_cursor -= 0.65 * cm
+    c.setFillColor(HexColor("#111827"))
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(x_contenido, y_cursor, f"{persona.apellido} {persona.nombre}")
+
+    y_cursor -= 0.5 * cm
+    c.setFillColor(GRIS)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(x_contenido, y_cursor, f"{persona.documento} DNI")
+
+    if persona.fecha_nacimiento:
+        y_cursor -= 0.4 * cm
+        texto_fecha = persona.fecha_nacimiento.strftime("%d/%m/%Y")
+        if edad is not None:
+            texto_fecha += f" · {edad} años"
+        c.drawString(x_contenido, y_cursor, texto_fecha)
+
+    y_cursor -= 0.45 * cm
+    c.setFont("Helvetica-Bold", 10)
+    club_texto = f"Club actual: {persona.club_actual.nombre}" if persona.club_actual else "Sin club"
+    c.drawString(x_contenido, y_cursor, club_texto)
+
+    # Foto arriba a la derecha
+    ancho_foto, alto_foto = 3.3 * cm, 3.9 * cm
+    x_foto = x0 + ancho_carnet - ancho_foto - 0.7 * cm
+    y_foto = y0 + alto_carnet - alto_foto - 0.6 * cm
+    if persona.foto and hasattr(persona.foto, "path"):
+        try:
+            c.drawImage(persona.foto.path, x_foto, y_foto, width=ancho_foto, height=alto_foto,
+                        preserveAspectRatio=False, mask="auto")
+        except Exception:
+            pass
+    else:
+        c.setFillColor(HexColor("#f4f6f9"))
+        c.rect(x_foto, y_foto, ancho_foto, alto_foto, fill=1, stroke=1)
+        c.setFillColor(HexColor("#9ca3af"))
+        c.setFont("Helvetica-Bold", 22)
+        iniciales = f"{persona.nombre[:1]}{persona.apellido[:1]}".upper()
+        c.drawCentredString(x_foto + ancho_foto / 2, y_foto + alto_foto / 2 - 8, iniciales)
+
+    # --- Franja azul diagonal, abajo ---
+    c.saveState()
+    p2 = c.beginPath()
+    alto_azul_izq = alto_carnet * 0.26
+    alto_azul_der = alto_carnet * 0.40
+    p2.moveTo(x0, y0)
+    p2.lineTo(x0 + ancho_carnet - radio, y0)
+    p2.arcTo(x0 + ancho_carnet - 2 * radio, y0, x0 + ancho_carnet, y0 + 2 * radio, startAng=270, extent=90)
+    p2.lineTo(x0 + ancho_carnet, y0 + alto_azul_der)
+    p2.lineTo(x0, y0 + alto_azul_izq)
+    p2.lineTo(x0, y0 + radio)
+    p2.arcTo(x0, y0, x0 + 2 * radio, y0 + 2 * radio, startAng=180, extent=90)
+    p2.close()
+    c.setFillColor(NAVY)
+    c.drawPath(p2, fill=1, stroke=0)
+    c.restoreState()
+
+    # Texto federación, en blanco, sobre la franja azul
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(x_contenido, y0 + 0.85 * cm, "FEDERACIÓN FUEGUINA")
+    c.drawString(x_contenido, y0 + 0.4 * cm, "DE FÚTBOL DE SALÓN")
+
+    # N° de carnet, centrado en la franja azul
+    cx_carnet = x0 + ancho_carnet * 0.62
+    c.setFillColor(HexColor("#a9c2de"))
+    c.setFont("Helvetica-Bold", 7)
+    c.drawCentredString(cx_carnet, y0 + 0.95 * cm, "N° DE CARNET")
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 17)
+    c.drawCentredString(cx_carnet, y0 + 0.45 * cm, persona.numero_carnet or "—")
+
+    # Logo de la federación, dentro de la franja azul
+    logo_path = finders.find("federacion_app/logo.png")
+    if logo_path:
+        try:
+            c.drawImage(logo_path, x0 + ancho_carnet - 1.9 * cm, y0 + 0.35 * cm,
+                        width=1.4 * cm, height=1.4 * cm, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+
+    # --- Ícono y texto vertical de la franja naranja, AL FINAL: así quedan
+    # por encima del corte diagonal azul y no se tapan (la franja azul avanza
+    # un poco dentro del ancho de la franja naranja en su parte más angosta). ---
+    cx_icono = x0 + ancho_franja / 2
+    cy_icono = y0 + alto_carnet - 1.1 * cm
+    c.setFillColor(white)
+    c.setFillAlpha(0.3)
+    c.circle(cx_icono, cy_icono, 0.42 * cm, fill=1, stroke=0)
+    c.setFillAlpha(1)
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(cx_icono, cy_icono - 5, "›")
+
+    c.saveState()
+    c.translate(x0 + ancho_franja / 2 + 4, y0 + alto_carnet / 2)
+    c.rotate(90)
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(0, 0, "CREDENCIAL OFICIAL")
+    c.restoreState()
+
+    # Contorno de corte y aclaración
+    c.setStrokeColor(HexColor("#cbd5e1"))
+    c.setDash(3, 3)
+    c.roundRect(x0, y0, ancho_carnet, alto_carnet, radio, fill=0, stroke=1)
+    c.setDash()
+    c.setFillColor(HexColor("#6b7280"))
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(ancho_pagina / 2, y0 - 0.8 * cm, "Carnet provisorio — recortar por la línea punteada")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="carnet_{persona.apellido}.pdf"'
+    return response
 
 
 @login_required
@@ -1607,6 +1815,19 @@ def presentaciones_formulario12(request):
 
 @login_required
 @user_passes_test(es_federacion)
+def ver_formulario12_presentacion(request, presentacion_id):
+    """La federación puede ver el Formulario 12 generado por el delegado, antes de que suban el firmado."""
+    from .models import PresentacionFormulario12
+
+    presentacion = get_object_or_404(PresentacionFormulario12, id=presentacion_id)
+    personas = list(presentacion.jugadores.all()) + list(presentacion.tecnicos.all())
+    return _generar_pdf_formulario_12(
+        presentacion.club, presentacion.torneo, presentacion.categoria, personas, request.user
+    )
+
+
+@login_required
+@user_passes_test(es_federacion)
 def historial_presentaciones_formulario12(request):
     """Historial de presentaciones ya resueltas (aprobadas o rechazadas), con los mismos filtros."""
     from .models import PresentacionFormulario12, Torneo
@@ -1684,6 +1905,7 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer, Paragraph, PageBreak
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+    from reportlab.graphics.shapes import Drawing, Rect, String
     from django.contrib.staticfiles import finders
     from django.http import HttpResponse
     import io
@@ -1701,8 +1923,8 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
     elementos = []
 
     logo_federacion = finders.find("federacion_app/logo.png")
-    img_federacion_chico = Image(logo_federacion, width=1.4 * cm, height=1.4 * cm) if logo_federacion else ""
-    img_club_chico = Image(club.escudo.path, width=1.4 * cm, height=1.4 * cm) if club.escudo else ""
+    img_federacion_chico = Image(logo_federacion, width=1.1 * cm, height=1.1 * cm) if logo_federacion else ""
+    img_club_chico = Image(club.escudo.path, width=1.1 * cm, height=1.1 * cm) if club.escudo else ""
 
     texto_legal = (
         "Los integrantes de la presente planilla declaran conocer y aceptar las condiciones absolutas de "
@@ -1811,8 +2033,8 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
             ("FONTSIZE", (0, 0), (-1, -1), 7),
             ("ALIGN", (0, 0), (2, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 1),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("TOPPADDING", (0, 0), (-1, -1), 0.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0.5),
         ]))
         elementos.append(tabla)
         elementos.append(Spacer(1, 3))
@@ -1829,16 +2051,41 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
         firma_izq = Paragraph("_______________________________<br/>Firma Presidente Club", estilo_centro)
         firma_der = Paragraph("_______________________________<br/>Firma Responsable Fo.Fu.Futsal", estilo_centro)
         sello_club = Paragraph("SELLO CLUB", estilo_centro)
-        sello_federacion = Paragraph("Sello Federación", estilo_centro)
+
+        # Sello de la federación, dibujado como una estampilla real (no texto plano):
+        # arriba el nombre de la federación, en el medio la fecha, abajo "RECIBIDO".
+        meses_abrev = {1: "ENE", 2: "FEB", 3: "MAR", 4: "ABR", 5: "MAY", 6: "JUN",
+                       7: "JUL", 8: "AGO", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DIC"}
+        hoy = date.today()
+        fecha_sello = f"{hoy.day:02d} {meses_abrev[hoy.month]} {hoy.year}"
+
+        ancho_sello, alto_sello = 56, 40
+        sello_federacion = Drawing(ancho_sello, alto_sello)
+        sello_federacion.add(Rect(
+            1, 1, ancho_sello - 2, alto_sello - 2, rx=6, ry=6,
+            strokeColor=colors.black, strokeWidth=1, fillColor=None,
+        ))
+        sello_federacion.add(String(ancho_sello / 2, alto_sello - 9, "FEDERACIÓN",
+                                     fontName="Helvetica-Bold", fontSize=5, textAnchor="middle", fillColor=colors.black))
+        sello_federacion.add(String(ancho_sello / 2, alto_sello - 15, "FUEGUINA",
+                                     fontName="Helvetica-Bold", fontSize=5, textAnchor="middle", fillColor=colors.black))
+        sello_federacion.add(String(ancho_sello / 2, alto_sello - 21, "FÚTBOL DE SALÓN",
+                                     fontName="Helvetica-Bold", fontSize=4.6, textAnchor="middle", fillColor=colors.black))
+        sello_federacion.add(Rect(5, alto_sello - 30, ancho_sello - 10, 9,
+                                   strokeColor=colors.black, strokeWidth=0.7, fillColor=None))
+        sello_federacion.add(String(ancho_sello / 2, alto_sello - 27.5, fecha_sello,
+                                     fontName="Helvetica-Bold", fontSize=5.4, textAnchor="middle", fillColor=colors.red))
+        sello_federacion.add(String(ancho_sello / 2, 4, "RECIBIDO",
+                                     fontName="Helvetica-Bold", fontSize=5.8, textAnchor="middle", fillColor=colors.black))
 
         tabla_firmas = Table(
             [
                 [cert_izq, img_club_chico, img_federacion_chico, cert_der],
                 ["", "", "", ""],  # espacio en blanco para firmar a mano
-                [firma_izq, sello_club, sello_federacion, firma_der],
+                [firma_izq, sello_club, "", [sello_federacion, firma_der]],
             ],
             colWidths=[8 * cm, 2.5 * cm, 2.5 * cm, 8 * cm],
-            rowHeights=[None, 1.3 * cm, None],
+            rowHeights=[None, 0.9 * cm, None],
         )
         tabla_firmas.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

@@ -67,6 +67,14 @@
   </div>
 </div>
 
+{% if user.rol == "federacion" %}
+<div style="display:flex; justify-content:center; margin-bottom:20px;">
+  <a href="{% url 'imprimir_carnet' persona.id %}" target="_blank">
+    <button type="button">🖨️ Imprimir carnet provisorio</button>
+  </a>
+</div>
+{% endif %}
+
 <div class="card">
   {% if edad and edad < 18 %}
   <p style="margin:0 0 8px;">
@@ -100,6 +108,20 @@
     <a href="{% url 'formulario_12' %}?categoria={{ categoria_para_formulario_12.id }}">
       📄 Ir al Formulario 12 de {{ categoria_para_formulario_12.nombre }} (para inscribirlo a un torneo)
     </a>
+  </p>
+  {% endif %}
+
+  {% if puede_pedir_jugador %}
+  <p style="margin:0 0 10px;">
+    {% if persona.club_actual %}
+      <a href="{% url 'nueva_solicitud' %}?documento={{ persona.documento }}&tipo=pase&nombre={{ persona.nombre|urlencode }}&apellido={{ persona.apellido|urlencode }}&fecha_nacimiento={{ persona.fecha_nacimiento|date:'Y-m-d' }}&numero_carnet={{ persona.numero_carnet|urlencode }}">
+        ⚽ Pedir este jugador (pase desde {{ persona.club_actual }})
+      </a>
+    {% else %}
+      <a href="{% url 'nueva_solicitud' %}?documento={{ persona.documento }}&tipo=alta_nueva&nombre={{ persona.nombre|urlencode }}&apellido={{ persona.apellido|urlencode }}&fecha_nacimiento={{ persona.fecha_nacimiento|date:'Y-m-d' }}&numero_carnet={{ persona.numero_carnet|urlencode }}">
+        ⚽ Sumar este jugador a mi club (está sin club)
+      </a>
+    {% endif %}
   </p>
   {% endif %}
 

@@ -237,10 +237,11 @@ class SolicitudPase(models.Model):
     TIPO_PASE_CHOICES = [
         ("definitivo", "Definitivo"),
         ("prestamo", "Préstamo"),
+        ("libre", "Libre"),
     ]
     tipo_pase = models.CharField(
         max_length=20, choices=TIPO_PASE_CHOICES, blank=True,
-        help_text="Solo aplica cuando tipo='pase'",
+        help_text="Solo aplica en un pase entre clubes.",
     )
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="solicitudes")
     club_origen = models.ForeignKey(

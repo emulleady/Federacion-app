@@ -26,6 +26,7 @@ urlpatterns = [
     path("panel/solicitud/<int:solicitud_id>/formulario-10/", views.formulario_10, name="formulario_10"),
     path("torneos/cobro-masivo/", views.cobro_masivo, name="cobro_masivo"),
     path("torneos/presentaciones/", views.presentaciones_formulario12, name="presentaciones_formulario12"),
+    path("torneos/presentaciones/<int:presentacion_id>/ver/", views.ver_formulario12_presentacion, name="ver_formulario12_presentacion"),
     path("torneos/presentaciones/historial/", views.historial_presentaciones_formulario12, name="historial_presentaciones_formulario12"),
     path("torneos/presentaciones/<int:presentacion_id>/resolver/", views.resolver_presentacion_formulario12, name="resolver_presentacion_formulario12"),
     path("torneos/inscripciones/historial/", views.historial_inscripciones, name="historial_inscripciones"),
@@ -43,6 +44,7 @@ urlpatterns = [
     path("persona/<int:persona_id>/subir-autorizacion/", views.subir_autorizacion, name="subir_autorizacion"),
     path("persona/<int:persona_id>/subir-foto/", views.subir_foto_persona, name="subir_foto_persona"),
     path("persona/<int:persona_id>/alternar-activo/", views.alternar_activo_persona, name="alternar_activo_persona"),
+    path("persona/<int:persona_id>/imprimir-carnet/", views.imprimir_carnet, name="imprimir_carnet"),
     path("buscar/", views.buscar_persona, name="buscar_persona"),
 
     # Tarjetas y sanciones
