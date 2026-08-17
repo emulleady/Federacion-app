@@ -6,6 +6,7 @@ from .models import (
     Torneo, InscripcionTorneo, PresentacionFormulario12,
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
     Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol, GolRecibido,
+    ConceptoPunitorio, Punitorio,
 )
 
 
@@ -153,3 +154,17 @@ class GolRecibidoAdmin(admin.ModelAdmin):
     list_display = ("persona", "club", "torneo", "fecha_partido", "cantidad")
     list_filter = ("torneo",)
     search_fields = ("persona__apellido", "persona__documento")
+
+
+@admin.register(ConceptoPunitorio)
+class ConceptoPunitorioAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "monto_sugerido", "activo")
+    list_filter = ("activo",)
+    search_fields = ("nombre",)
+
+
+@admin.register(Punitorio)
+class PunitorioAdmin(admin.ModelAdmin):
+    list_display = ("club", "concepto", "monto", "estado", "fecha_generado", "cargado_por")
+    list_filter = ("estado", "concepto")
+    search_fields = ("club__nombre", "motivo")

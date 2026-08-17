@@ -2734,3 +2734,108 @@ def valla_menos_vencida(request):
         "ranking": ranking, "torneos": torneos, "categorias": categorias,
         "torneo_id": torneo_id, "categoria_id": categoria_id,
     })
+
+
+# ---------------------------------------------------------------------
+# PUNITORIOS
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def cargar_punitorio(request):
+    """La federación aplica un punitorio a un club, con monto y motivo manuales, y notifica al club."""
+    from .models import ConceptoPunitorio, Punitorio, Notificacion
+
+    clubes = Club.objects.all().order_by("nombre")
+    conceptos = ConceptoPunitorio.objects.filter(activo=True)
+
+    if request.method == "POST":
+        club_elegido = get_object_or_404(Club, id=request.POST.get("club"))
+        concepto_id = request.POST.get("concepto") or None
+        motivo = request.POST.get("motivo", "").strip()
+        monto = request.POST.get("monto")
+
+        if not motivo or not monto:
+            messages.error(request, "Completá el motivo y el monto.")
+        else:
+            punitorio = Punitorio.objects.create(
+                club=club_elegido, concepto_id=concepto_id, motivo=motivo, monto=monto,
+                cargado_por=request.user,
+            )
+
+            notificacion = Notificacion.objects.create(
+                titulo=f"Punitorio aplicado — ${monto}",
+                mensaje=f"{motivo}\n\nPara subir el comprobante de pago, andá al menú → \"Punitorios\".",
+                creada_por=request.user,
+            )
+            notificacion.destinatarios.set([club_elegido])
+
+            messages.success(request, f"Punitorio de ${monto} aplicado a {club_elegido.nombre} y notificado.")
+            return redirect("cargar_punitorio")
+
+    return render(request, "federacion_app/cargar_punitorio.html", {
+        "clubes": clubes, "conceptos": conceptos,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def punitorios_pendientes(request):
+    """La federación ve los punitorios pendientes de cobro y los marca como pagados."""
+    from .models import Punitorio
+    punitorios = Punitorio.objects.filter(estado="pendiente").select_related("club", "concepto")
+    return render(request, "federacion_app/punitorios_pendientes.html", {"punitorios": punitorios})
+
+
+@login_required
+@user_passes_test(es_federacion)
+def historial_punitorios(request):
+    """Historial de punitorios ya pagados, filtrable por club."""
+    from .models import Punitorio
+
+    clubes = Club.objects.all().order_by("nombre")
+    club_id = request.GET.get("club")
+
+    punitorios = Punitorio.objects.filter(estado="pagado").select_related("club", "concepto", "resuelto_por")
+    if club_id:
+        punitorios = punitorios.filter(club_id=club_id)
+    punitorios = punitorios.order_by("-fecha_pago")
+
+    return render(request, "federacion_app/historial_punitorios.html", {
+        "punitorios": punitorios, "clubes": clubes, "club_id": club_id,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def resolver_punitorio(request, punitorio_id):
+    from .models import Punitorio
+    punitorio = get_object_or_404(Punitorio, id=punitorio_id)
+    if request.method == "POST":
+        punitorio.estado = "pagado"
+        punitorio.resuelto_por = request.user
+        punitorio.fecha_pago = date.today()
+        punitorio.save()
+        messages.success(request, f"Punitorio de {punitorio.club} marcado como pagado.")
+    return redirect("punitorios_pendientes")
+
+
+@login_required
+@user_passes_test(es_delegado)
+def mis_punitorios(request):
+    """El delegado ve los punitorios de su club y sube el comprobante de pago."""
+    from .models import Punitorio
+    punitorios = Punitorio.objects.filter(club=request.user.club).select_related("concepto")
+    return render(request, "federacion_app/mis_punitorios.html", {"punitorios": punitorios})
+
+
+@login_required
+@user_passes_test(es_delegado)
+def subir_comprobante_punitorio(request, punitorio_id):
+    from .models import Punitorio
+    punitorio = get_object_or_404(Punitorio, id=punitorio_id, club=request.user.club)
+    if request.method == "POST" and request.FILES.get("archivo"):
+        punitorio.comprobante_pago = request.FILES["archivo"]
+        punitorio.save()
+        messages.success(request, "Comprobante subido. La federación lo va a revisar.")
+    return redirect("mis_punitorios")

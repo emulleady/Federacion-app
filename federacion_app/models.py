@@ -678,3 +678,59 @@ class GolRecibido(models.Model):
 
     def __str__(self):
         return f"{self.persona} — {self.cantidad} gol(es) recibido(s) ({self.fecha_partido})"
+
+
+# ---------------------------------------------------------------------
+# PUNITORIOS
+# ---------------------------------------------------------------------
+
+class ConceptoPunitorio(models.Model):
+    """
+    Catálogo de conceptos de punitorio (sanción económica), cargado
+    desde el admin. El monto sugerido se mantiene durante la temporada,
+    para no tener que reescribirlo cada vez que se aplica.
+    """
+    nombre = models.CharField(max_length=150)
+    monto_sugerido = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    descripcion = models.TextField(
+        blank=True, help_text="Texto de motivo por defecto, editable al momento de aplicarlo.",
+    )
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class Punitorio(models.Model):
+    """Sanción económica (punitorio) aplicada a un club por la federación."""
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente"),
+        ("pagado", "Pagado"),
+    ]
+
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="punitorios")
+    concepto = models.ForeignKey(
+        ConceptoPunitorio, null=True, blank=True, on_delete=models.SET_NULL, related_name="punitorios"
+    )
+    motivo = models.TextField()
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    comprobante_pago = models.FileField(upload_to="comprobantes_punitorios/", null=True, blank=True)
+
+    fecha_generado = models.DateTimeField(auto_now_add=True)
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+
+    cargado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="punitorios_cargados")
+    resuelto_por = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name="punitorios_resueltos"
+    )
+
+    class Meta:
+        ordering = ["-fecha_generado"]
+
+    def __str__(self):
+        return f"{self.club} — {self.motivo[:40]} — ${self.monto}"

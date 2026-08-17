@@ -74,4 +74,12 @@ urlpatterns = [
     # Valla menos vencida
     path("valla-menos-vencida/cargar/", views.cargar_gol_recibido, name="cargar_gol_recibido"),
     path("valla-menos-vencida/", views.valla_menos_vencida, name="valla_menos_vencida"),
+
+    # Punitorios
+    path("punitorios/cargar/", views.cargar_punitorio, name="cargar_punitorio"),
+    path("punitorios/pendientes/", views.punitorios_pendientes, name="punitorios_pendientes"),
+    path("punitorios/historial/", views.historial_punitorios, name="historial_punitorios"),
+    path("punitorios/<int:punitorio_id>/resolver/", views.resolver_punitorio, name="resolver_punitorio"),
+    path("punitorios/mios/", views.mis_punitorios, name="mis_punitorios"),
+    path("punitorios/mios/<int:punitorio_id>/subir/", views.subir_comprobante_punitorio, name="subir_comprobante_punitorio"),
 ]

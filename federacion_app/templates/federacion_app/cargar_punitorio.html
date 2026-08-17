@@ -1,0 +1,55 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Aplicar punitorio a un club</h2>
+  <p style="color:#6b7280; font-size:13px;">Se le va a notificar automáticamente al club, con el motivo que escribas acá.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:640px;">
+      <div>
+        <label>Club</label>
+        <select name="club" required>
+          <option value="">— Seleccionar —</option>
+          {% for c in clubes %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Concepto (opcional, autocompleta motivo y monto)</label>
+        <select id="concepto-select" onchange="autocompletar()">
+          <option value="">— Manual / otro —</option>
+          {% for con in conceptos %}
+            <option value="{{ con.id }}" data-monto="{{ con.monto_sugerido|default:'' }}" data-motivo="{{ con.descripcion|default:con.nombre }}">
+              {{ con.nombre }}{% if con.monto_sugerido %} (${{ con.monto_sugerido }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="concepto" id="concepto-id">
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Motivo</label>
+        <textarea name="motivo" id="motivo-input" rows="3" required></textarea>
+      </div>
+      <div>
+        <label>Monto ($)</label>
+        <input type="number" name="monto" id="monto-input" step="0.01" min="0" required>
+      </div>
+    </div>
+    <button type="submit" style="margin-top:16px;">Aplicar punitorio y notificar</button>
+  </form>
+</div>
+
+<script>
+  function autocompletar() {
+    const select = document.getElementById('concepto-select');
+    const opcion = select.options[select.selectedIndex];
+    document.getElementById('concepto-id').value = select.value;
+    if (select.value) {
+      document.getElementById('motivo-input').value = opcion.dataset.motivo || '';
+      if (opcion.dataset.monto) {
+        document.getElementById('monto-input').value = opcion.dataset.monto;
+      }
+    }
+  }
+</script>
+{% endblock %}
