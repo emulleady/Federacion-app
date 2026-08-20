@@ -58,8 +58,8 @@ class PersonaAdmin(admin.ModelAdmin):
 
 @admin.register(Vinculo)
 class VinculoAdmin(admin.ModelAdmin):
-    list_display = ("persona", "club", "categoria", "fecha_inicio", "fecha_fin")
-    list_filter = ("club", "categoria")
+    list_display = ("persona", "club", "categoria", "tipo", "rol_tecnico", "fecha_inicio", "fecha_fin")
+    list_filter = ("club", "categoria", "tipo")
     search_fields = ("persona__apellido", "persona__nombre", "persona__documento")
 
 

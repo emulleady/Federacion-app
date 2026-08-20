@@ -658,6 +658,7 @@ def importar_excel(request):
                                         "fecha_nacimiento": fecha_nac,
                                         "numero_carnet": numero_carnet,
                                         "requiere_carnet": requiere_carnet,
+                                        "activo": True,
                                     },
                                 )
                                 if fue_creada:
@@ -1132,7 +1133,7 @@ def mi_padron(request):
     categoria_id = request.GET.get("categoria")
 
     jugadores = Persona.objects.filter(
-        vinculos__club=club, vinculos__fecha_fin__isnull=True, tipo="jugador"
+        vinculos__club=club, vinculos__fecha_fin__isnull=True, vinculos__tipo="jugador"
     ).distinct().order_by("apellido")
     if categoria_id:
         jugadores = jugadores.filter(vinculos__categoria_id=categoria_id, vinculos__fecha_fin__isnull=True)
@@ -1280,16 +1281,21 @@ def ficha_persona(request, persona_id):
 
     # Si es un delegado y el jugador es suyo, guardamos la categoría para armar
     # el acceso directo al Formulario 12 (ya con torneo/categoría precargados).
+    # Se busca puntualmente un vínculo donde sea JUGADOR (podría tener, además,
+    # otro vínculo como técnico en otra categoría del mismo club).
     categoria_para_formulario_12 = None
-    if puede_editar_foto and persona.tipo == "jugador":
-        vinculo_propio = persona.vinculos.filter(club=request.user.club, fecha_fin__isnull=True).first()
+    if puede_editar_foto:
+        vinculo_propio = persona.vinculos.filter(
+            club=request.user.club, fecha_fin__isnull=True, tipo="jugador"
+        ).first()
         if vinculo_propio:
             categoria_para_formulario_12 = vinculo_propio.categoria
 
-    # Si el delegado ve a un jugador que todavía no es suyo, le damos un
-    # acceso directo para pedirlo (pase), sin tener que anotar el documento.
+    # Si el delegado ve a un jugador (en algún vínculo) que todavía no es
+    # suyo, le damos un acceso directo para pedirlo (pase).
+    es_jugador_en_algun_lado = persona.vinculos.filter(tipo="jugador", fecha_fin__isnull=True).exists()
     puede_pedir_jugador = (
-        request.user.rol == "delegado" and request.user.club and persona.tipo == "jugador" and
+        request.user.rol == "delegado" and request.user.club and es_jugador_en_algun_lado and
         not puede_editar_foto
     )
 
@@ -1667,9 +1673,10 @@ def formulario_12(request):
                     "rol_tecnico": tecnico_form.cleaned_data["rol_tecnico"],
                 },
             )
-            if not persona.vinculos.filter(club=club, fecha_fin__isnull=True).exists():
+            if not persona.vinculos.filter(club=club, categoria=categoria, fecha_fin__isnull=True).exists():
                 Vinculo.objects.create(
-                    persona=persona, club=club, categoria=categoria, fecha_inicio=date.today()
+                    persona=persona, club=club, categoria=categoria, fecha_inicio=date.today(),
+                    tipo="tecnico", rol_tecnico=tecnico_form.cleaned_data["rol_tecnico"],
                 )
             messages.success(request, f"{persona} agregado al cuerpo técnico.")
             url = f"/torneos/formulario-12/?torneo={torneo_id or ''}&categoria={categoria_id or ''}"
@@ -1682,11 +1689,16 @@ def formulario_12(request):
     torneo_elegido = Torneo.objects.filter(id=torneo_id).first() if torneo_id else None
 
     if categoria:
-        base = Persona.objects.filter(
-            vinculos__club=club, vinculos__categoria=categoria, vinculos__fecha_fin__isnull=True
-        ).exclude(tipo="jugador", activo=False).distinct()
-        jugadores_qs = base.filter(tipo="jugador").order_by("apellido")
-        tecnicos_qs = base.filter(tipo="tecnico").order_by("apellido")
+        vinculos_categoria = Vinculo.objects.filter(
+            club=club, categoria=categoria, fecha_fin__isnull=True
+        )
+        tipo_por_persona_en_vinculo = {v.persona_id: v.tipo for v in vinculos_categoria}
+        jugadores_qs = Persona.objects.filter(
+            id__in=vinculos_categoria.filter(tipo="jugador").values_list("persona_id", flat=True)
+        ).order_by("apellido")
+        tecnicos_qs = Persona.objects.filter(
+            id__in=vinculos_categoria.filter(tipo="tecnico").values_list("persona_id", flat=True)
+        ).order_by("apellido")
 
         if torneo_elegido:
             # Jugadores que ya tienen inscripción para este torneo (viene de
@@ -1727,8 +1739,8 @@ def formulario_12(request):
             presentacion = PresentacionFormulario12.objects.create(
                 club=club, torneo=torneo, categoria=categoria, creado_por=request.user,
             )
-            presentacion.jugadores.set([p for p in seleccionadas if p.tipo == "jugador"])
-            presentacion.tecnicos.set([p for p in seleccionadas if p.tipo == "tecnico"])
+            presentacion.jugadores.set([p for p in seleccionadas if tipo_por_persona_en_vinculo.get(p.id) == "jugador"])
+            presentacion.tecnicos.set([p for p in seleccionadas if tipo_por_persona_en_vinculo.get(p.id) == "tecnico"])
             return _generar_pdf_formulario_12(club, torneo, categoria, seleccionadas, request.user)
 
     return render(request, "federacion_app/formulario_12.html", {
@@ -1907,6 +1919,17 @@ def resolver_presentacion_formulario12(request, presentacion_id):
                     persona=p, club=presentacion.club, torneo=presentacion.torneo,
                     defaults={"inscrito_por": presentacion.creado_por},
                 )
+                if not p.activo:
+                    p.activo = True
+                    p.save(update_fields=["activo"])
+
+            # El cuerpo técnico también se activa con la aprobación (no tiene
+            # InscripcionTorneo, solo se marca activo).
+            for t in presentacion.tecnicos.all():
+                if not t.activo:
+                    t.activo = True
+                    t.save(update_fields=["activo"])
+
             presentacion.estado = "aprobado"
             presentacion.aprobado_por = request.user
             presentacion.fecha_aprobacion = date.today()
@@ -1964,13 +1987,21 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
     )
 
     # Solo los jugadores ocupan las 20 líneas numeradas; el cuerpo técnico
-    # va aparte, en 4 renglones fijos (uno por rol).
-    jugadores = [p for p in personas if p.tipo == "jugador"]
-    tecnicos = [p for p in personas if p.tipo == "tecnico"]
+    # va aparte, en 4 renglones fijos (uno por rol). El rol se toma del
+    # vínculo específico (club+categoría), no de la persona en general —
+    # así alguien puede ser jugador en una categoría y técnico en otra.
+    vinculos_relevantes = Vinculo.objects.filter(
+        club=club, categoria=categoria, persona__in=personas, fecha_fin__isnull=True
+    )
+    info_vinculo = {v.persona_id: (v.tipo, v.rol_tecnico) for v in vinculos_relevantes}
+
+    jugadores = [p for p in personas if info_vinculo.get(p.id, ("jugador", ""))[0] == "jugador"]
+    tecnicos = [p for p in personas if info_vinculo.get(p.id, ("jugador", ""))[0] == "tecnico"]
     tecnico_por_rol = {}
     for t in tecnicos:
-        if t.rol_tecnico and t.rol_tecnico not in tecnico_por_rol:
-            tecnico_por_rol[t.rol_tecnico] = t
+        rol = info_vinculo.get(t.id, ("tecnico", ""))[1]
+        if rol and rol not in tecnico_por_rol:
+            tecnico_por_rol[rol] = t
 
     grupos = [jugadores[i:i + 20] for i in range(0, len(jugadores), 20)] or [[]]
 
@@ -2296,7 +2327,7 @@ def cargar_tarjeta(request):
     jugadores = []
     if club_elegido:
         jugadores = Persona.objects.filter(
-            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, vinculos__tipo="jugador"
         ).distinct().order_by("apellido")
 
     if request.method == "POST" and request.POST.get("accion") == "cargar":
@@ -2634,7 +2665,7 @@ def cargar_gol(request):
     jugadores = []
     if club_elegido:
         jugadores = Persona.objects.filter(
-            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, vinculos__tipo="jugador"
         ).distinct().order_by("apellido")
 
     if request.method == "POST" and request.POST.get("accion") == "cargar":
@@ -2706,7 +2737,7 @@ def cargar_gol_recibido(request):
     jugadores = []
     if club_elegido:
         jugadores = Persona.objects.filter(
-            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, tipo="jugador"
+            vinculos__club=club_elegido, vinculos__fecha_fin__isnull=True, vinculos__tipo="jugador"
         ).distinct().order_by("apellido")
 
     if request.method == "POST" and request.POST.get("accion") == "cargar":

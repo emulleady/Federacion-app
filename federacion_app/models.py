@@ -116,7 +116,10 @@ class Persona(models.Model):
     foto = models.ImageField(upload_to="fotos_personas/", null=True, blank=True)
     numero_carnet = models.CharField(max_length=30, blank=True, help_text="Número de carnet de la federación, si ya lo tiene.")
     requiere_carnet = models.BooleanField(default=False, help_text="Marcar si hay que tramitarle el carnet.")
-    activo = models.BooleanField(default=True, help_text="Si está desactivado, no puede jugar ni ser seleccionado en planillas.")
+    activo = models.BooleanField(
+        default=False,
+        help_text="Se activa solo cuando se aprueba su primer Formulario 12. Si está desactivado, no puede jugar ni ser seleccionado en planillas.",
+    )
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -174,10 +177,24 @@ class Vinculo(models.Model):
     los vínculos activos de una persona, uno queda marcado como
     "principal" (es_principal=True) para saber cuál mostrar como
     referencia en el padrón y la ficha.
+
+    El rol (jugador o cuerpo técnico) es propio de CADA vínculo, no de
+    la persona en general — así una misma persona puede ser jugador en
+    un club/categoría y DT (u otro rol técnico) en otro, algo bastante
+    común en categorías menores.
     """
+    TIPO_CHOICES = [
+        ("jugador", "Jugador"),
+        ("tecnico", "Cuerpo técnico"),
+    ]
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="vinculos")
     club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="vinculos")
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, null=True, blank=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="jugador")
+    rol_tecnico = models.CharField(
+        max_length=10, choices=Persona.ROL_TECNICO_CHOICES, blank=True,
+        help_text="Solo si tipo='tecnico', en este vínculo puntual.",
+    )
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField(null=True, blank=True)
     numero_camiseta = models.PositiveSmallIntegerField(null=True, blank=True)
