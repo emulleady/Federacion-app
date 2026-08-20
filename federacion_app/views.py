@@ -1030,7 +1030,8 @@ def _generar_pdf_planilla(request, club):
     # --- Encabezado: logo federación | nombre del club | escudo del club ---
     logo_federacion = finders.find("federacion_app/logo.png")
     img_federacion = Image(logo_federacion, width=2.5 * cm, height=2.5 * cm) if logo_federacion else ""
-    img_club = Image(club.escudo.path, width=2.5 * cm, height=2.5 * cm) if club.escudo else ""
+    _bytes_escudo = _bytes_de_imagen(club.escudo)
+    img_club = Image(_bytes_escudo, width=2.5 * cm, height=2.5 * cm) if _bytes_escudo else ""
 
     encabezado = Table(
         [[img_federacion, Paragraph(club.nombre.upper(), estilo_titulo), img_club]],
@@ -1428,13 +1429,17 @@ def imprimir_carnet(request, persona_id):
     ancho_foto, alto_foto = 3.3 * cm, 3.9 * cm
     x_foto = x0 + ancho_carnet - ancho_foto - 0.7 * cm
     y_foto = y0 + alto_carnet - alto_foto - 0.6 * cm
-    if persona.foto and hasattr(persona.foto, "path"):
-        try:
-            c.drawImage(persona.foto.path, x_foto, y_foto, width=ancho_foto, height=alto_foto,
-                        preserveAspectRatio=False, mask="auto")
-        except Exception:
-            pass
-    else:
+    foto_dibujada = False
+    if persona.foto:
+        _bytes_foto = _bytes_de_imagen(persona.foto)
+        if _bytes_foto:
+            try:
+                c.drawImage(_bytes_foto, x_foto, y_foto, width=ancho_foto, height=alto_foto,
+                            preserveAspectRatio=False, mask="auto")
+                foto_dibujada = True
+            except Exception:
+                pass
+    if not foto_dibujada:
         c.setFillColor(HexColor("#f4f6f9"))
         c.rect(x_foto, y_foto, ancho_foto, alto_foto, fill=1, stroke=1)
         c.setFillColor(HexColor("#9ca3af"))
@@ -1760,6 +1765,25 @@ def subir_formulario12_firmado(request, presentacion_id):
     return redirect("mis_presentaciones_formulario12")
 
 
+def _bytes_de_imagen(campo_archivo):
+    """
+    Devuelve el contenido de una foto/escudo como BytesIO, sirva desde
+    disco local (desarrollo) o desde Cloudinary (producción). Usar esto
+    en vez de `.path`, que solo funciona con archivos en disco local y
+    tira error con Cloudinary.
+    """
+    if not campo_archivo:
+        return None
+    import io
+    try:
+        campo_archivo.open("rb")
+        contenido = campo_archivo.read()
+        campo_archivo.close()
+        return io.BytesIO(contenido)
+    except Exception:
+        return None
+
+
 def _edad(persona):
     if not persona.fecha_nacimiento:
         return None
@@ -1924,7 +1948,8 @@ def _generar_pdf_formulario_12(club, torneo, categoria, personas, usuario):
 
     logo_federacion = finders.find("federacion_app/logo.png")
     img_federacion_chico = Image(logo_federacion, width=1.1 * cm, height=1.1 * cm) if logo_federacion else ""
-    img_club_chico = Image(club.escudo.path, width=1.1 * cm, height=1.1 * cm) if club.escudo else ""
+    _bytes_escudo_club = _bytes_de_imagen(club.escudo)
+    img_club_chico = Image(_bytes_escudo_club, width=1.1 * cm, height=1.1 * cm) if _bytes_escudo_club else ""
 
     texto_legal = (
         "Los integrantes de la presente planilla declaran conocer y aceptar las condiciones absolutas de "
