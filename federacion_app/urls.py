@@ -82,4 +82,13 @@ urlpatterns = [
     path("punitorios/<int:punitorio_id>/resolver/", views.resolver_punitorio, name="resolver_punitorio"),
     path("punitorios/mios/", views.mis_punitorios, name="mis_punitorios"),
     path("punitorios/mios/<int:punitorio_id>/subir/", views.subir_comprobante_punitorio, name="subir_comprobante_punitorio"),
+
+    # Árbitros
+    path("arbitros/", views.panel_arbitro, name="panel_arbitro"),
+    path("arbitros/informes/", views.informes_arbitros, name="informes_arbitros"),
+    path("arbitros/informes/<int:informe_id>/responder/", views.responder_informe_arbitro, name="responder_informe_arbitro"),
+
+    # Pedidos de carnet
+    path("carnets/pedidos/", views.pedidos_carnet, name="pedidos_carnet"),
+    path("carnets/pedidos/<int:persona_id>/resolver/", views.resolver_pedido_carnet, name="resolver_pedido_carnet"),
 ]

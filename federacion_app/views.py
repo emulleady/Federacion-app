@@ -22,6 +22,10 @@ def es_consejo_disciplina(usuario):
     return usuario.is_authenticated and usuario.rol == "consejo_disciplina"
 
 
+def es_arbitro(usuario):
+    return usuario.is_authenticated and usuario.rol == "arbitro"
+
+
 def _notificar_pedido_jugador(solicitud):
     """
     Le avisa por email a los delegados del club de origen que otro club
@@ -70,6 +74,8 @@ def home(request):
         return redirect("panel_solicitudes")
     elif request.user.rol == "consejo_disciplina":
         return redirect("panel_disciplina")
+    elif request.user.rol == "arbitro":
+        return redirect("panel_arbitro")
     return redirect("buscar_persona")
 
 
@@ -338,8 +344,8 @@ def formulario_09(request, solicitud_id):
         [Paragraph(f"{solicitud.club_origen.nombre if solicitud.club_origen else ''}", estilos["Normal"]),
          Paragraph(f"{solicitud.club_destino.nombre}", estilos["Normal"])],
         ["", ""],
-        ["_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente",
-         "_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente"],
+        [Paragraph("_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente", estilos["Normal"]),
+         Paragraph("_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________<br/>firma secretario / firma presidente", estilos["Normal"])],
     ]
     tabla_conformidad = Table(conformidad, colWidths=[9 * cm, 9 * cm])
     tabla_conformidad.setStyle(TableStyle([
@@ -440,8 +446,8 @@ def formulario_10(request, solicitud_id):
     elementos.append(Paragraph(f"{solicitud.club_destino.nombre}", estilos["Normal"]))
     elementos.append(Spacer(1, 26))
     tabla_conformidad = Table(
-        [["_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________"],
-         ["firma Secretario &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; del CLUB &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; firma Presidente"]],
+        [[Paragraph("_______________________&nbsp;&nbsp;&nbsp;SELLO&nbsp;&nbsp;&nbsp;_______________________", estilos["Normal"])],
+         [Paragraph("firma Secretario &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; del CLUB &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; firma Presidente", estilos["Normal"])]],
         colWidths=[18 * cm],
     )
     tabla_conformidad.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 9), ("ALIGN", (0, 0), (-1, -1), "CENTER")]))
@@ -985,6 +991,12 @@ def planilla_partido(request):
     ).distinct().order_by("apellido")
     categorias = Categoria.objects.all().order_by("nombre")
 
+    # Cuerpo técnico fichado (con vínculo activo como técnico en el club) y
+    # activo — no cualquier nombre suelto, solo gente realmente registrada.
+    tecnicos_club = Persona.objects.filter(
+        vinculos__club=club, vinculos__fecha_fin__isnull=True, vinculos__tipo="tecnico", activo=True
+    ).distinct().order_by("apellido")
+
     ids_sancionados = _ids_jugadores_sancionados(club)
 
     # Categoría de cada jugador, para el filtro del lado del cliente
@@ -1007,7 +1019,7 @@ def planilla_partido(request):
 
     return render(request, "federacion_app/planilla_partido.html", {
         "jugadores": jugadores_con_categoria, "categorias": categorias, "club": club,
-        "jugadores_sancionados": jugadores_sancionados,
+        "jugadores_sancionados": jugadores_sancionados, "tecnicos_club": tecnicos_club,
     })
 
 
@@ -1079,9 +1091,20 @@ def _generar_pdf_planilla(request, club):
             nombre_completo, carnet, camiseta = "", "", ""
         filas.append([str(i), nombre_completo, carnet, camiseta])
 
-    filas.append(["DT", request.POST.get("dt", ""), "", ""])
-    filas.append(["AT", request.POST.get("at", ""), "", ""])
-    filas.append(["PF", request.POST.get("pf", ""), "", ""])
+    def _nombre_tecnico_valido(campo_post):
+        """Busca a la persona por ID y valida que sea cuerpo técnico fichado y activo de este club."""
+        persona_id = request.POST.get(campo_post, "")
+        if not persona_id:
+            return ""
+        tecnico = Persona.objects.filter(
+            id=persona_id, activo=True,
+            vinculos__club=club, vinculos__tipo="tecnico", vinculos__fecha_fin__isnull=True,
+        ).first()
+        return f"{tecnico.apellido}, {tecnico.nombre}" if tecnico else ""
+
+    filas.append(["DT", _nombre_tecnico_valido("dt"), "", ""])
+    filas.append(["AT", _nombre_tecnico_valido("at"), "", ""])
+    filas.append(["PF", _nombre_tecnico_valido("pf"), "", ""])
 
     tabla_plantel = Table(filas, colWidths=[1.3 * cm, 9 * cm, 4 * cm, 3.7 * cm], repeatRows=1)
     tabla_plantel.setStyle(TableStyle([
@@ -1693,12 +1716,15 @@ def formulario_12(request):
             club=club, categoria=categoria, fecha_fin__isnull=True
         )
         tipo_por_persona_en_vinculo = {v.persona_id: v.tipo for v in vinculos_categoria}
+        ids_de_la_categoria = list(vinculos_categoria.values_list("persona_id", flat=True))
+        ids_deshabilitados = _ids_deshabilitados_para_formulario12(ids_de_la_categoria)
+
         jugadores_qs = Persona.objects.filter(
             id__in=vinculos_categoria.filter(tipo="jugador").values_list("persona_id", flat=True)
-        ).order_by("apellido")
+        ).exclude(id__in=ids_deshabilitados).order_by("apellido")
         tecnicos_qs = Persona.objects.filter(
             id__in=vinculos_categoria.filter(tipo="tecnico").values_list("persona_id", flat=True)
-        ).order_by("apellido")
+        ).exclude(id__in=ids_deshabilitados).order_by("apellido")
 
         if torneo_elegido:
             # Jugadores que ya tienen inscripción para este torneo (viene de
@@ -1729,6 +1755,8 @@ def formulario_12(request):
 
         torneo = get_object_or_404(Torneo, id=torneo_id)
         ids_seleccionados = request.POST.getlist("personas")
+        ids_bloqueados = _ids_deshabilitados_para_formulario12([int(i) for i in ids_seleccionados])
+        ids_seleccionados = [i for i in ids_seleccionados if int(i) not in ids_bloqueados]
         seleccionadas = list(Persona.objects.filter(id__in=ids_seleccionados))
         orden = {int(pid): i for i, pid in enumerate(ids_seleccionados)}
         seleccionadas.sort(key=lambda p: orden.get(p.id, 999))
@@ -1803,6 +1831,34 @@ def _edad(persona):
     return hoy.year - persona.fecha_nacimiento.year - (
         (hoy.month, hoy.day) < (persona.fecha_nacimiento.month, persona.fecha_nacimiento.day)
     )
+
+
+def _ids_deshabilitados_para_formulario12(ids_a_revisar):
+    """
+    De una lista de IDs de personas, devuelve los que están desactivados
+    y YA tuvieron al menos una aprobación antes (o sea, estuvieron
+    activos y los desactivaron después). Los que nunca tuvieron ninguna
+    aprobación (recién dados de alta) NO se incluyen acá, porque
+    todavía necesitan poder aparecer en el Formulario 12 para activarse
+    por primera vez.
+    """
+    from .models import InscripcionTorneo, PresentacionFormulario12
+
+    ids_inactivos = set(
+        Persona.objects.filter(id__in=ids_a_revisar, activo=False).values_list("id", flat=True)
+    )
+    if not ids_inactivos:
+        return set()
+
+    ids_con_aprobacion_jugador = set(
+        InscripcionTorneo.objects.filter(persona_id__in=ids_inactivos).values_list("persona_id", flat=True)
+    )
+    ids_con_aprobacion_tecnico = set(
+        PresentacionFormulario12.objects.filter(
+            tecnicos__id__in=ids_inactivos, estado="aprobado"
+        ).values_list("tecnicos__id", flat=True)
+    )
+    return ids_inactivos & (ids_con_aprobacion_jugador | ids_con_aprobacion_tecnico)
 
 
 def _menores_sin_autorizacion(presentacion):
@@ -2895,3 +2951,109 @@ def subir_comprobante_punitorio(request, punitorio_id):
         punitorio.save()
         messages.success(request, "Comprobante subido. La federación lo va a revisar.")
     return redirect("mis_punitorios")
+
+
+# ---------------------------------------------------------------------
+# ÁRBITROS
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_arbitro)
+def panel_arbitro(request):
+    """
+    Único módulo al que accede el árbitro: cargar un informe de
+    partido (con archivo adjunto opcional) y ver las respuestas de la
+    federación a sus informes anteriores.
+    """
+    from .models import InformeArbitro, Torneo
+
+    clubes = Club.objects.all().order_by("nombre")
+    torneos = Torneo.objects.filter(activo=True)
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    if request.method == "POST":
+        InformeArbitro.objects.create(
+            arbitro=request.user,
+            torneo_id=request.POST.get("torneo") or None,
+            categoria_id=request.POST.get("categoria") or None,
+            club_local_id=request.POST.get("club_local") or None,
+            club_visitante_id=request.POST.get("club_visitante") or None,
+            fecha_partido=request.POST.get("fecha_partido"),
+            contenido=request.POST.get("contenido", ""),
+            archivo=request.FILES.get("archivo"),
+        )
+        messages.success(request, "Informe enviado a la federación.")
+        return redirect("panel_arbitro")
+
+    informes = InformeArbitro.objects.filter(arbitro=request.user).prefetch_related(
+        "respuestas", "club_local", "club_visitante", "torneo"
+    )
+    # Al entrar, se marcan como vistas las respuestas de la federación.
+    for informe in informes:
+        informe.respuestas.filter(visto_por_arbitro=False).update(visto_por_arbitro=True)
+
+    return render(request, "federacion_app/panel_arbitro.html", {
+        "clubes": clubes, "torneos": torneos, "categorias": categorias, "informes": informes,
+    })
+
+
+@login_required
+@user_passes_test(_es_consejo_o_federacion)
+def informes_arbitros(request):
+    """La federación ve los informes de los árbitros y les responde (con comentario y archivo opcional)."""
+    from .models import InformeArbitro
+
+    informes = InformeArbitro.objects.select_related(
+        "arbitro", "torneo", "categoria", "club_local", "club_visitante"
+    ).prefetch_related("respuestas").order_by("-fecha_envio")
+
+    # Al entrar, se marcan como vistos.
+    informes.filter(visto_por_federacion=False).update(visto_por_federacion=True)
+
+    return render(request, "federacion_app/informes_arbitros.html", {"informes": informes})
+
+
+@login_required
+@user_passes_test(_es_consejo_o_federacion)
+def responder_informe_arbitro(request, informe_id):
+    from .models import InformeArbitro, RespuestaInforme
+    informe = get_object_or_404(InformeArbitro, id=informe_id)
+    if request.method == "POST" and request.POST.get("mensaje", "").strip():
+        RespuestaInforme.objects.create(
+            informe=informe,
+            mensaje=request.POST["mensaje"].strip(),
+            archivo=request.FILES.get("archivo"),
+            respondido_por=request.user,
+        )
+        messages.success(request, "Respuesta enviada al árbitro.")
+    return redirect("informes_arbitros")
+
+
+# ---------------------------------------------------------------------
+# PEDIDOS DE CARNET
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def pedidos_carnet(request):
+    """La federación ve quién necesita que le tramiten/impriman el carnet, y carga el número cuando lo hace."""
+    pendientes = Persona.objects.filter(
+        requiere_carnet=True, numero_carnet=""
+    ).order_by("fecha_registro")
+    return render(request, "federacion_app/pedidos_carnet.html", {"pendientes": pendientes})
+
+
+@login_required
+@user_passes_test(es_federacion)
+def resolver_pedido_carnet(request, persona_id):
+    """Carga el número de carnet impreso; al tener número, sale solo de la lista de pendientes."""
+    persona = get_object_or_404(Persona, id=persona_id)
+    if request.method == "POST":
+        numero = request.POST.get("numero_carnet", "").strip()
+        if numero:
+            persona.numero_carnet = numero
+            persona.save(update_fields=["numero_carnet"])
+            messages.success(request, f"Carnet N° {numero} cargado para {persona}.")
+        else:
+            messages.error(request, "Ingresá el número de carnet.")
+    return redirect("pedidos_carnet")

@@ -1,0 +1,45 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Informes de árbitros</h2>
+
+{% for i in informes %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h3 style="margin:0 0 4px;">
+        {{ i.club_local|default:"—" }} vs {{ i.club_visitante|default:"—" }}
+      </h3>
+      <p style="color:#6b7280; font-size:13px; margin:0;">
+        Árbitro: {{ i.arbitro.username }} ·
+        {{ i.fecha_partido|date:"d/m/Y" }}{% if i.torneo %} · {{ i.torneo }}{% endif %}{% if i.categoria %} · {{ i.categoria.nombre }}{% endif %}
+        · enviado el {{ i.fecha_envio|date:"d/m/Y" }}
+      </p>
+    </div>
+    {% if i.archivo %}<a href="{{ i.archivo.url }}" target="_blank" download>📎 Descargar informe adjunto</a>{% endif %}
+  </div>
+  <p style="margin:10px 0; white-space:pre-line;">{{ i.contenido }}</p>
+
+  {% for r in i.respuestas.all %}
+  <div class="mensaje" style="background:#eff6ff; border-left-color:#2563eb; color:#1e40af;">
+    <strong>
+      Respuesta de {% if r.respondido_por.rol == "consejo_disciplina" %}Tribunal de Disciplina{% else %}Federación{% endif %}
+      {% if r.respondido_por == user %}(vos){% endif %}
+      ({{ r.fecha|date:"d/m/Y" }}):
+    </strong> {{ r.mensaje }}
+    {% if r.archivo %}<br><a href="{{ r.archivo.url }}" target="_blank" style="color:#1e40af;">📎 Ver archivo adjunto</a>{% endif %}
+  </div>
+  {% endfor %}
+
+  <form method="post" action="{% url 'responder_informe_arbitro' i.id %}" enctype="multipart/form-data" style="margin-top:10px;">
+    {% csrf_token %}
+    <textarea name="mensaje" rows="2" placeholder="Responder al árbitro..." style="margin-bottom:8px;"></textarea>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="file" name="archivo" style="font-size:12px;">
+      <button type="submit">Responder</button>
+    </div>
+  </form>
+</div>
+{% empty %}
+<p style="color:#6b7280;">Todavía no hay informes cargados.</p>
+{% endfor %}
+{% endblock %}

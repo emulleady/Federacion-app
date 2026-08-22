@@ -28,6 +28,7 @@ class Usuario(AbstractUser):
         ("delegado", "Delegado de club"),
         ("federacion", "Administrador de federación"),
         ("consejo_disciplina", "Consejo de disciplina"),
+        ("arbitro", "Árbitro"),
     ]
     rol = models.CharField(max_length=20, choices=ROL_CHOICES)
     club = models.ForeignKey(
@@ -751,3 +752,45 @@ class Punitorio(models.Model):
 
     def __str__(self):
         return f"{self.club} — {self.motivo[:40]} — ${self.monto}"
+
+
+# ---------------------------------------------------------------------
+# ÁRBITROS
+# ---------------------------------------------------------------------
+
+class InformeArbitro(models.Model):
+    """Informe de partido que carga un árbitro, con archivo adjunto opcional."""
+    arbitro = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="informes_arbitrales")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, null=True, blank=True)
+    categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, null=True, blank=True)
+    club_local = models.ForeignKey(Club, on_delete=models.PROTECT, null=True, blank=True, related_name="informes_como_local")
+    club_visitante = models.ForeignKey(Club, on_delete=models.PROTECT, null=True, blank=True, related_name="informes_como_visitante")
+    fecha_partido = models.DateField()
+    contenido = models.TextField()
+    archivo = models.FileField(upload_to="informes_arbitros/", null=True, blank=True)
+
+    fecha_envio = models.DateTimeField(auto_now_add=True)
+    visto_por_federacion = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-fecha_envio"]
+
+    def __str__(self):
+        return f"Informe de {self.arbitro} — {self.fecha_partido}"
+
+
+class RespuestaInforme(models.Model):
+    """Respuesta de la federación a un informe de árbitro, con archivo adjunto opcional."""
+    informe = models.ForeignKey(InformeArbitro, on_delete=models.CASCADE, related_name="respuestas")
+    mensaje = models.TextField()
+    archivo = models.FileField(upload_to="respuestas_informes_arbitros/", null=True, blank=True)
+
+    respondido_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="respuestas_a_arbitros")
+    fecha = models.DateTimeField(auto_now_add=True)
+    visto_por_arbitro = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"Respuesta a {self.informe}"

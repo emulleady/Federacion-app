@@ -6,7 +6,7 @@ from .models import (
     Torneo, InscripcionTorneo, PresentacionFormulario12,
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
     Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol, GolRecibido,
-    ConceptoPunitorio, Punitorio,
+    ConceptoPunitorio, Punitorio, InformeArbitro, RespuestaInforme,
 )
 
 
@@ -168,3 +168,16 @@ class PunitorioAdmin(admin.ModelAdmin):
     list_display = ("club", "concepto", "monto", "estado", "fecha_generado", "cargado_por")
     list_filter = ("estado", "concepto")
     search_fields = ("club__nombre", "motivo")
+
+
+class RespuestaInformeInline(admin.TabularInline):
+    model = RespuestaInforme
+    extra = 0
+
+
+@admin.register(InformeArbitro)
+class InformeArbitroAdmin(admin.ModelAdmin):
+    list_display = ("arbitro", "club_local", "club_visitante", "fecha_partido", "torneo", "visto_por_federacion")
+    list_filter = ("torneo", "visto_por_federacion")
+    search_fields = ("arbitro__username", "club_local__nombre", "club_visitante__nombre")
+    inlines = [RespuestaInformeInline]

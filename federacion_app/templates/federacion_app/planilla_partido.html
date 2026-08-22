@@ -55,10 +55,33 @@
     </table>
 
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px;">
-      <div><label>DT</label><input type="text" name="dt"></div>
-      <div><label>AT</label><input type="text" name="at"></div>
-      <div><label>PF</label><input type="text" name="pf"></div>
+      <div>
+        <label>DT</label>
+        <select name="dt">
+          <option value="">— Seleccionar —</option>
+          {% for t in tecnicos_club %}<option value="{{ t.id }}">{{ t.apellido }}, {{ t.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>AT</label>
+        <select name="at">
+          <option value="">— Seleccionar —</option>
+          {% for t in tecnicos_club %}<option value="{{ t.id }}">{{ t.apellido }}, {{ t.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>PF</label>
+        <select name="pf">
+          <option value="">— Seleccionar —</option>
+          {% for t in tecnicos_club %}<option value="{{ t.id }}">{{ t.apellido }}, {{ t.nombre }}</option>{% endfor %}
+        </select>
+      </div>
     </div>
+    {% if not tecnicos_club %}
+    <p style="color:#6b7280; font-size:13px; margin-top:-10px;">
+      Todavía no tenés cuerpo técnico fichado. Agregalo desde el <a href="{% url 'formulario_12' %}">Formulario 12</a>.
+    </p>
+    {% endif %}
 
     <h3>Pagos</h3>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; margin-bottom:20px;">

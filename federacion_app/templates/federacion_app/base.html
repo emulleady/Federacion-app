@@ -315,11 +315,29 @@
           <a href="{% url 'cargar_punitorio' %}">Aplicar punitorio</a>
           <a href="{% url 'punitorios_pendientes' %}">Punitorios pendientes</a>
           <a href="{% url 'historial_punitorios' %}">Historial punitorios</a>
+          <a href="{% url 'informes_arbitros' %}">
+            Informes de árbitros
+            {% if informes_nuevos_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ informes_nuevos_count }}</span>{% endif %}
+          </a>
+          <a href="{% url 'pedidos_carnet' %}">
+            Pedidos de carnet
+            {% if pedidos_carnet_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ pedidos_carnet_count }}</span>{% endif %}
+          </a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
+          <a href="{% url 'informes_arbitros' %}">
+            Informes de árbitros
+            {% if informes_nuevos_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ informes_nuevos_count }}</span>{% endif %}
+          </a>
         {% endif %}
-        {% if user.rol != "consejo_disciplina" %}
+        {% if user.rol == "arbitro" %}
+          <a href="{% url 'panel_arbitro' %}">
+            Panel del Árbitro
+            {% if respuestas_nuevas_arbitro_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ respuestas_nuevas_arbitro_count }}</span>{% endif %}
+          </a>
+        {% endif %}
+        {% if user.rol != "consejo_disciplina" and user.rol != "arbitro" %}
           <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
         {% endif %}
         <form action="{% url 'logout' %}" method="post" style="display:inline;">

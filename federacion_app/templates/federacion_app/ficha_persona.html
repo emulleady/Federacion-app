@@ -140,6 +140,7 @@
   <tr>
     <th>Club</th>
     <th>Categoría</th>
+    <th>Rol</th>
     <th>Desde</th>
     <th>Hasta</th>
   </tr>
@@ -147,8 +148,17 @@
   <tr>
     <td>{{ v.club }}</td>
     <td>{{ v.categoria|default:"—" }}</td>
+    <td>{% if v.tipo == "tecnico" %}{{ v.get_rol_tecnico_display|default:"Cuerpo técnico" }}{% else %}Jugador{% endif %}</td>
     <td>{{ v.fecha_inicio|date:"d/m/Y" }}</td>
-    <td>{{ v.fecha_fin|date:"d/m/Y"|default:"activo" }}</td>
+    <td>
+      {% if v.fecha_fin %}
+        {{ v.fecha_fin|date:"d/m/Y" }}
+      {% elif not persona.activo %}
+        <span style="color:#991b1b; font-weight:600;">desactivado</span>
+      {% else %}
+        activo
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
