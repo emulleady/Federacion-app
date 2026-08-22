@@ -52,9 +52,16 @@
         <span>{{ p.apellido }}, {{ p.nombre }} <span style="color:#6b7280;">({{ p.documento }})</span></span>
       </a>
     </td>
+    <td>
+      {% if p.activo %}
+        <span class="badge badge-aprobado">Activo</span>
+      {% else %}
+        <span class="badge badge-rechazado">Desactivado</span>
+      {% endif %}
+    </td>
   </tr>
   {% empty %}
-  <tr><td>No hay jugadores para ese filtro.</td></tr>
+  <tr><td colspan="2">No hay jugadores para ese filtro.</td></tr>
   {% endfor %}
 </table>
 {% endif %}
