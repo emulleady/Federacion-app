@@ -291,6 +291,7 @@
           <a href="{% url 'institucional' %}">Institucional</a>
           <a href="{% url 'goleadores' %}">Goleadores</a>
           <a href="{% url 'valla_menos_vencida' %}">Valla menos vencida</a>
+          <a href="{% url 'mis_punitorios' %}">Punitorios</a>
         {% endif %}
         {% if user.rol == "federacion" %}
           <a href="{% url 'panel_solicitudes' %}">Panel de aprobación</a>
@@ -311,6 +312,9 @@
           <a href="{% url 'goleadores' %}">Goleadores</a>
           <a href="{% url 'cargar_gol_recibido' %}">Cargar goles recibidos</a>
           <a href="{% url 'valla_menos_vencida' %}">Valla menos vencida</a>
+          <a href="{% url 'cargar_punitorio' %}">Aplicar punitorio</a>
+          <a href="{% url 'punitorios_pendientes' %}">Punitorios pendientes</a>
+          <a href="{% url 'historial_punitorios' %}">Historial punitorios</a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>

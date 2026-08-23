@@ -1,0 +1,44 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Historial de punitorios pagados</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'punitorios_pendientes' %}">← Volver a pendientes</a></p>
+
+<div class="card">
+  <form method="get" style="max-width:300px;">
+    <label>Filtrar por club</label>
+    <select name="club" onchange="this.form.submit()">
+      <option value="">Todos</option>
+      {% for c in clubes %}
+        <option value="{{ c.id }}" {% if club_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<table>
+  <tr>
+    <th>Club</th>
+    <th>Concepto</th>
+    <th>Motivo</th>
+    <th>Monto</th>
+    <th>Comprobante</th>
+    <th>Fecha aplicado</th>
+    <th>Fecha pagado</th>
+    <th>Validado por</th>
+  </tr>
+  {% for p in punitorios %}
+  <tr>
+    <td>{{ p.club.nombre }}</td>
+    <td>{{ p.concepto|default:"Manual" }}</td>
+    <td>{{ p.motivo|truncatewords:12 }}</td>
+    <td>${{ p.monto }}</td>
+    <td>{% if p.comprobante_pago %}<a href="{{ p.comprobante_pago.url }}" target="_blank">Ver</a>{% else %}—{% endif %}</td>
+    <td>{{ p.fecha_generado|date:"d/m/Y" }}</td>
+    <td>{{ p.fecha_pago|date:"d/m/Y" }}</td>
+    <td>{{ p.resuelto_por.username|default:"—" }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="8">Todavía no hay punitorios pagados para este filtro.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

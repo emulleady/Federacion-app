@@ -1,0 +1,40 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Punitorios pendientes</h2>
+<p style="margin-bottom:16px;"><a href="{% url 'historial_punitorios' %}">Ver historial de punitorios pagados</a></p>
+<table>
+  <tr>
+    <th>Club</th>
+    <th>Concepto</th>
+    <th>Motivo</th>
+    <th>Monto</th>
+    <th>Comprobante</th>
+    <th>Fecha</th>
+    <th></th>
+  </tr>
+  {% for p in punitorios %}
+  <tr>
+    <td>{{ p.club.nombre }}</td>
+    <td>{{ p.concepto|default:"Manual" }}</td>
+    <td>{{ p.motivo|truncatewords:12 }}</td>
+    <td>${{ p.monto }}</td>
+    <td>
+      {% if p.comprobante_pago %}
+        <a href="{{ p.comprobante_pago.url }}" target="_blank">Ver comprobante</a>
+      {% else %}
+        <span class="badge badge-pendiente">Sin subir</span>
+      {% endif %}
+    </td>
+    <td>{{ p.fecha_generado|date:"d/m/Y" }}</td>
+    <td>
+      <form method="post" action="{% url 'resolver_punitorio' p.id %}">
+        {% csrf_token %}
+        <button type="submit" {% if not p.comprobante_pago %}disabled title="Todavía no subieron el comprobante"{% endif %}>Marcar pagado</button>
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="7">No hay punitorios pendientes.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

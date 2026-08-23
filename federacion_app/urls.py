@@ -26,6 +26,7 @@ urlpatterns = [
     path("panel/solicitud/<int:solicitud_id>/formulario-10/", views.formulario_10, name="formulario_10"),
     path("torneos/cobro-masivo/", views.cobro_masivo, name="cobro_masivo"),
     path("torneos/presentaciones/", views.presentaciones_formulario12, name="presentaciones_formulario12"),
+    path("torneos/presentaciones/<int:presentacion_id>/ver/", views.ver_formulario12_presentacion, name="ver_formulario12_presentacion"),
     path("torneos/presentaciones/historial/", views.historial_presentaciones_formulario12, name="historial_presentaciones_formulario12"),
     path("torneos/presentaciones/<int:presentacion_id>/resolver/", views.resolver_presentacion_formulario12, name="resolver_presentacion_formulario12"),
     path("torneos/inscripciones/historial/", views.historial_inscripciones, name="historial_inscripciones"),
@@ -43,6 +44,7 @@ urlpatterns = [
     path("persona/<int:persona_id>/subir-autorizacion/", views.subir_autorizacion, name="subir_autorizacion"),
     path("persona/<int:persona_id>/subir-foto/", views.subir_foto_persona, name="subir_foto_persona"),
     path("persona/<int:persona_id>/alternar-activo/", views.alternar_activo_persona, name="alternar_activo_persona"),
+    path("persona/<int:persona_id>/imprimir-carnet/", views.imprimir_carnet, name="imprimir_carnet"),
     path("buscar/", views.buscar_persona, name="buscar_persona"),
 
     # Tarjetas y sanciones
@@ -72,4 +74,12 @@ urlpatterns = [
     # Valla menos vencida
     path("valla-menos-vencida/cargar/", views.cargar_gol_recibido, name="cargar_gol_recibido"),
     path("valla-menos-vencida/", views.valla_menos_vencida, name="valla_menos_vencida"),
+
+    # Punitorios
+    path("punitorios/cargar/", views.cargar_punitorio, name="cargar_punitorio"),
+    path("punitorios/pendientes/", views.punitorios_pendientes, name="punitorios_pendientes"),
+    path("punitorios/historial/", views.historial_punitorios, name="historial_punitorios"),
+    path("punitorios/<int:punitorio_id>/resolver/", views.resolver_punitorio, name="resolver_punitorio"),
+    path("punitorios/mios/", views.mis_punitorios, name="mis_punitorios"),
+    path("punitorios/mios/<int:punitorio_id>/subir/", views.subir_comprobante_punitorio, name="subir_comprobante_punitorio"),
 ]
