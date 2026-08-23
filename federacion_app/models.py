@@ -28,6 +28,7 @@ class Usuario(AbstractUser):
         ("delegado", "Delegado de club"),
         ("federacion", "Administrador de federación"),
         ("consejo_disciplina", "Consejo de disciplina"),
+        ("arbitro", "Árbitro"),
     ]
     rol = models.CharField(max_length=20, choices=ROL_CHOICES)
     club = models.ForeignKey(
@@ -116,7 +117,10 @@ class Persona(models.Model):
     foto = models.ImageField(upload_to="fotos_personas/", null=True, blank=True)
     numero_carnet = models.CharField(max_length=30, blank=True, help_text="Número de carnet de la federación, si ya lo tiene.")
     requiere_carnet = models.BooleanField(default=False, help_text="Marcar si hay que tramitarle el carnet.")
-    activo = models.BooleanField(default=True, help_text="Si está desactivado, no puede jugar ni ser seleccionado en planillas.")
+    activo = models.BooleanField(
+        default=False,
+        help_text="Se activa solo cuando se aprueba su primer Formulario 12. Si está desactivado, no puede jugar ni ser seleccionado en planillas.",
+    )
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -174,10 +178,24 @@ class Vinculo(models.Model):
     los vínculos activos de una persona, uno queda marcado como
     "principal" (es_principal=True) para saber cuál mostrar como
     referencia en el padrón y la ficha.
+
+    El rol (jugador o cuerpo técnico) es propio de CADA vínculo, no de
+    la persona en general — así una misma persona puede ser jugador en
+    un club/categoría y DT (u otro rol técnico) en otro, algo bastante
+    común en categorías menores.
     """
+    TIPO_CHOICES = [
+        ("jugador", "Jugador"),
+        ("tecnico", "Cuerpo técnico"),
+    ]
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="vinculos")
     club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="vinculos")
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, null=True, blank=True)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="jugador")
+    rol_tecnico = models.CharField(
+        max_length=10, choices=Persona.ROL_TECNICO_CHOICES, blank=True,
+        help_text="Solo si tipo='tecnico', en este vínculo puntual.",
+    )
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField(null=True, blank=True)
     numero_camiseta = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -237,10 +255,11 @@ class SolicitudPase(models.Model):
     TIPO_PASE_CHOICES = [
         ("definitivo", "Definitivo"),
         ("prestamo", "Préstamo"),
+        ("libre", "Libre"),
     ]
     tipo_pase = models.CharField(
         max_length=20, choices=TIPO_PASE_CHOICES, blank=True,
-        help_text="Solo aplica cuando tipo='pase'",
+        help_text="Solo aplica en un pase entre clubes.",
     )
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name="solicitudes")
     club_origen = models.ForeignKey(
@@ -677,3 +696,101 @@ class GolRecibido(models.Model):
 
     def __str__(self):
         return f"{self.persona} — {self.cantidad} gol(es) recibido(s) ({self.fecha_partido})"
+
+
+# ---------------------------------------------------------------------
+# PUNITORIOS
+# ---------------------------------------------------------------------
+
+class ConceptoPunitorio(models.Model):
+    """
+    Catálogo de conceptos de punitorio (sanción económica), cargado
+    desde el admin. El monto sugerido se mantiene durante la temporada,
+    para no tener que reescribirlo cada vez que se aplica.
+    """
+    nombre = models.CharField(max_length=150)
+    monto_sugerido = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    descripcion = models.TextField(
+        blank=True, help_text="Texto de motivo por defecto, editable al momento de aplicarlo.",
+    )
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class Punitorio(models.Model):
+    """Sanción económica (punitorio) aplicada a un club por la federación."""
+    ESTADO_CHOICES = [
+        ("pendiente", "Pendiente"),
+        ("pagado", "Pagado"),
+    ]
+
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="punitorios")
+    concepto = models.ForeignKey(
+        ConceptoPunitorio, null=True, blank=True, on_delete=models.SET_NULL, related_name="punitorios"
+    )
+    motivo = models.TextField()
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
+    comprobante_pago = models.FileField(upload_to="comprobantes_punitorios/", null=True, blank=True)
+
+    fecha_generado = models.DateTimeField(auto_now_add=True)
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+
+    cargado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="punitorios_cargados")
+    resuelto_por = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name="punitorios_resueltos"
+    )
+
+    class Meta:
+        ordering = ["-fecha_generado"]
+
+    def __str__(self):
+        return f"{self.club} — {self.motivo[:40]} — ${self.monto}"
+
+
+# ---------------------------------------------------------------------
+# ÁRBITROS
+# ---------------------------------------------------------------------
+
+class InformeArbitro(models.Model):
+    """Informe de partido que carga un árbitro, con archivo adjunto opcional."""
+    arbitro = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="informes_arbitrales")
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, null=True, blank=True)
+    categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, null=True, blank=True)
+    club_local = models.ForeignKey(Club, on_delete=models.PROTECT, null=True, blank=True, related_name="informes_como_local")
+    club_visitante = models.ForeignKey(Club, on_delete=models.PROTECT, null=True, blank=True, related_name="informes_como_visitante")
+    fecha_partido = models.DateField()
+    contenido = models.TextField()
+    archivo = models.FileField(upload_to="informes_arbitros/", null=True, blank=True)
+
+    fecha_envio = models.DateTimeField(auto_now_add=True)
+    visto_por_federacion = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-fecha_envio"]
+
+    def __str__(self):
+        return f"Informe de {self.arbitro} — {self.fecha_partido}"
+
+
+class RespuestaInforme(models.Model):
+    """Respuesta de la federación a un informe de árbitro, con archivo adjunto opcional."""
+    informe = models.ForeignKey(InformeArbitro, on_delete=models.CASCADE, related_name="respuestas")
+    mensaje = models.TextField()
+    archivo = models.FileField(upload_to="respuestas_informes_arbitros/", null=True, blank=True)
+
+    respondido_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="respuestas_a_arbitros")
+    fecha = models.DateTimeField(auto_now_add=True)
+    visto_por_arbitro = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"Respuesta a {self.informe}"

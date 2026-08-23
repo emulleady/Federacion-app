@@ -1,0 +1,32 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Pedidos de carnet</h2>
+<p style="color:#6b7280; font-size:13px;">Jugadores/cuerpo técnico que marcaron "Necesita tramitar el carnet" y todavía no tienen número asignado.</p>
+
+<table>
+  <tr>
+    <th>Persona</th>
+    <th>Documento</th>
+    <th>Club actual</th>
+    <th>Pedido el</th>
+    <th>Cargar N° de carnet</th>
+  </tr>
+  {% for p in pendientes %}
+  <tr>
+    <td><a href="{% url 'ficha_persona' p.id %}">{{ p.apellido }}, {{ p.nombre }}</a></td>
+    <td>{{ p.documento }}</td>
+    <td>{{ p.club_actual|default:"—" }}</td>
+    <td>{{ p.fecha_registro|date:"d/m/Y" }}</td>
+    <td>
+      <form method="post" action="{% url 'resolver_pedido_carnet' p.id %}" style="display:flex; gap:6px;">
+        {% csrf_token %}
+        <input type="text" name="numero_carnet" placeholder="N° de carnet" style="width:130px;" required>
+        <button type="submit" style="padding:5px 12px; font-size:13px;">Guardar</button>
+      </form>
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No hay pedidos de carnet pendientes.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

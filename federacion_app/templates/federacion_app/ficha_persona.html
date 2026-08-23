@@ -67,6 +67,14 @@
   </div>
 </div>
 
+{% if user.rol == "federacion" %}
+<div style="display:flex; justify-content:center; margin-bottom:20px;">
+  <a href="{% url 'imprimir_carnet' persona.id %}" target="_blank">
+    <button type="button">🖨️ Imprimir carnet provisorio</button>
+  </a>
+</div>
+{% endif %}
+
 <div class="card">
   {% if edad and edad < 18 %}
   <p style="margin:0 0 8px;">
@@ -103,6 +111,20 @@
   </p>
   {% endif %}
 
+  {% if puede_pedir_jugador %}
+  <p style="margin:0 0 10px;">
+    {% if persona.club_actual %}
+      <a href="{% url 'nueva_solicitud' %}?documento={{ persona.documento }}&tipo=pase&nombre={{ persona.nombre|urlencode }}&apellido={{ persona.apellido|urlencode }}&fecha_nacimiento={{ persona.fecha_nacimiento|date:'Y-m-d' }}&numero_carnet={{ persona.numero_carnet|urlencode }}">
+        ⚽ Pedir este jugador (pase desde {{ persona.club_actual }})
+      </a>
+    {% else %}
+      <a href="{% url 'nueva_solicitud' %}?documento={{ persona.documento }}&tipo=alta_nueva&nombre={{ persona.nombre|urlencode }}&apellido={{ persona.apellido|urlencode }}&fecha_nacimiento={{ persona.fecha_nacimiento|date:'Y-m-d' }}&numero_carnet={{ persona.numero_carnet|urlencode }}">
+        ⚽ Sumar este jugador a mi club (está sin club)
+      </a>
+    {% endif %}
+  </p>
+  {% endif %}
+
   {% if user.rol == "federacion" %}
   <form method="post" action="{% url 'alternar_activo_persona' persona.id %}">
     {% csrf_token %}
@@ -118,6 +140,7 @@
   <tr>
     <th>Club</th>
     <th>Categoría</th>
+    <th>Rol</th>
     <th>Desde</th>
     <th>Hasta</th>
   </tr>
@@ -125,8 +148,17 @@
   <tr>
     <td>{{ v.club }}</td>
     <td>{{ v.categoria|default:"—" }}</td>
+    <td>{% if v.tipo == "tecnico" %}{{ v.get_rol_tecnico_display|default:"Cuerpo técnico" }}{% else %}Jugador{% endif %}</td>
     <td>{{ v.fecha_inicio|date:"d/m/Y" }}</td>
-    <td>{{ v.fecha_fin|date:"d/m/Y"|default:"activo" }}</td>
+    <td>
+      {% if v.fecha_fin %}
+        {{ v.fecha_fin|date:"d/m/Y" }}
+      {% elif not persona.activo %}
+        <span style="color:#991b1b; font-weight:600;">desactivado</span>
+      {% else %}
+        activo
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>

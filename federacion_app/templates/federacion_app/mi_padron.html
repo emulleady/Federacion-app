@@ -31,6 +31,7 @@
     <th>Jugador</th>
     <th>Documento</th>
     <th>Carnet</th>
+    <th>Estado</th>
   </tr>
   {% for p in jugadores %}
   <tr>
@@ -44,9 +45,16 @@
     <td><a href="{% url 'ficha_persona' p.id %}">{{ p.apellido }}, {{ p.nombre }}</a></td>
     <td>{{ p.documento }}</td>
     <td>{{ p.numero_carnet|default:"—" }}</td>
+    <td>
+      {% if p.activo %}
+        <span class="badge badge-aprobado">Activo</span>
+      {% else %}
+        <span class="badge badge-rechazado">Desactivado</span>
+      {% endif %}
+    </td>
   </tr>
   {% empty %}
-  <tr><td colspan="4">No hay jugadores cargados{% if categoria_id %} en esta categoría{% endif %} todavía.</td></tr>
+  <tr><td colspan="5">No hay jugadores cargados{% if categoria_id %} en esta categoría{% endif %} todavía.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

@@ -18,6 +18,10 @@
 
   <p style="margin:12px 0; white-space:pre-line;">{{ fila.notificacion.mensaje }}</p>
 
+  {% if "Punitorio aplicado" in fila.notificacion.titulo %}
+  <p style="margin:0 0 12px;"><a href="{% url 'mis_punitorios' %}">💰 Ir a Punitorios para subir el comprobante</a></p>
+  {% endif %}
+
   {% if fila.notificacion.archivo %}
   <p><a href="{{ fila.notificacion.archivo.url }}" target="_blank">📎 Ver documento adjunto</a></p>
   {% endif %}

@@ -1,0 +1,85 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Panel del Árbitro</h2>
+
+<div class="card">
+  <h3>Nuevo informe de partido</h3>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div>
+        <label>Torneo (opcional)</label>
+        <select name="torneo">
+          <option value="">—</option>
+          {% for t in torneos %}<option value="{{ t.id }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Categoría (opcional)</label>
+        <select name="categoria">
+          <option value="">—</option>
+          {% for cat in categorias %}<option value="{{ cat.id }}">{{ cat.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Club local (opcional)</label>
+        <select name="club_local">
+          <option value="">—</option>
+          {% for c in clubes %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Club visitante (opcional)</label>
+        <select name="club_visitante">
+          <option value="">—</option>
+          {% for c in clubes %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Fecha del partido</label>
+        <input type="date" name="fecha_partido" required>
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Informe</label>
+        <textarea name="contenido" rows="5" required placeholder="Detalle del partido, incidentes, observaciones..."></textarea>
+      </div>
+      <div style="grid-column: span 2;">
+        <label>Archivo adjunto (opcional)</label>
+        <input type="file" name="archivo">
+      </div>
+    </div>
+    <button type="submit" style="margin-top:14px;">Enviar informe</button>
+  </form>
+</div>
+
+<h3>Mis informes</h3>
+{% for i in informes %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h3 style="margin:0 0 4px;">
+        {{ i.club_local|default:"—" }} vs {{ i.club_visitante|default:"—" }}
+      </h3>
+      <p style="color:#6b7280; font-size:13px; margin:0;">
+        {{ i.fecha_partido|date:"d/m/Y" }}{% if i.torneo %} · {{ i.torneo }}{% endif %}{% if i.categoria %} · {{ i.categoria.nombre }}{% endif %}
+        · enviado el {{ i.fecha_envio|date:"d/m/Y" }}
+      </p>
+    </div>
+    {% if i.archivo %}<a href="{{ i.archivo.url }}" target="_blank">📎 Ver adjunto</a>{% endif %}
+  </div>
+  <p style="margin:10px 0; white-space:pre-line;">{{ i.contenido }}</p>
+
+  {% for r in i.respuestas.all %}
+  <div class="mensaje" style="background:#eff6ff; border-left-color:#2563eb; color:#1e40af;">
+    <strong>
+      Respuesta de {% if r.respondido_por.rol == "consejo_disciplina" %}Tribunal de Disciplina{% else %}Federación{% endif %}
+      ({{ r.fecha|date:"d/m/Y" }}):
+    </strong> {{ r.mensaje }}
+    {% if r.archivo %}<br><a href="{{ r.archivo.url }}" target="_blank" style="color:#1e40af;">📎 Ver archivo adjunto</a>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% empty %}
+<p style="color:#6b7280;">Todavía no enviaste ningún informe.</p>
+{% endfor %}
+{% endblock %}

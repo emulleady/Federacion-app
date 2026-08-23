@@ -21,11 +21,25 @@ def sanciones_pendientes_context(request):
 
         return {"sanciones_pendientes_count": cantidad_sanciones, "notificaciones_no_leidas_count": no_leidas}
 
-    if getattr(request.user, "rol", None) == "federacion":
-        from .models import NotificacionAcuse
-        acuses_nuevos = NotificacionAcuse.objects.filter(
-            fecha_acuse__isnull=False, visto_por_federacion=False
+    if getattr(request.user, "rol", None) in ("federacion", "consejo_disciplina"):
+        from .models import InformeArbitro
+        informes_nuevos = InformeArbitro.objects.filter(visto_por_federacion=False).count()
+        datos = {"informes_nuevos_count": informes_nuevos}
+        if request.user.rol == "federacion":
+            from .models import NotificacionAcuse, Persona
+            acuses_nuevos = NotificacionAcuse.objects.filter(
+                fecha_acuse__isnull=False, visto_por_federacion=False
+            ).count()
+            pedidos_carnet = Persona.objects.filter(requiere_carnet=True, numero_carnet="").count()
+            datos["acuses_nuevos_count"] = acuses_nuevos
+            datos["pedidos_carnet_count"] = pedidos_carnet
+        return datos
+
+    if getattr(request.user, "rol", None) == "arbitro":
+        from .models import RespuestaInforme
+        respuestas_nuevas = RespuestaInforme.objects.filter(
+            informe__arbitro=request.user, visto_por_arbitro=False
         ).count()
-        return {"acuses_nuevos_count": acuses_nuevos}
+        return {"respuestas_nuevas_arbitro_count": respuestas_nuevas}
 
     return {}

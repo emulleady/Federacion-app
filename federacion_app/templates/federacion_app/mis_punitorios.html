@@ -1,0 +1,37 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Punitorios de {{ request.user.club }}</h2>
+
+<table>
+  <tr>
+    <th>Concepto</th>
+    <th>Motivo</th>
+    <th>Monto</th>
+    <th>Estado</th>
+    <th>Comprobante</th>
+  </tr>
+  {% for p in punitorios %}
+  <tr>
+    <td>{{ p.concepto|default:"Manual" }}</td>
+    <td>{{ p.motivo }}</td>
+    <td>${{ p.monto }}</td>
+    <td><span class="badge badge-{{ p.estado }}">{{ p.get_estado_display }}</span></td>
+    <td>
+      {% if p.comprobante_pago %}
+        <a href="{{ p.comprobante_pago.url }}" target="_blank">Ver</a>
+      {% elif p.estado == "pendiente" %}
+        <form method="post" action="{% url 'subir_comprobante_punitorio' p.id %}" enctype="multipart/form-data" style="display:flex; gap:6px; align-items:center;">
+          {% csrf_token %}
+          <input type="file" name="archivo" required style="font-size:12px; width:130px;">
+          <button type="submit" style="padding:5px 10px; font-size:12px;">Subir</button>
+        </form>
+      {% else %}
+        —
+      {% endif %}
+    </td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="5">No tenés punitorios registrados.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

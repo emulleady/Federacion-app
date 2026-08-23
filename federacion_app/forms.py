@@ -22,7 +22,7 @@ class SolicitudPaseForm(forms.ModelForm):
     foto = forms.ImageField(label="Foto del jugador", required=False)
     numero_carnet = forms.CharField(label="Número de carnet (si ya lo tiene)", max_length=30, required=False)
     requiere_carnet = forms.BooleanField(label="¿Necesita tramitar el carnet?", required=False)
-    archivo_documentacion = forms.FileField(label="Documentación (DNI, certificado médico)", required=False)
+    archivo_documentacion = forms.FileField(label="Documentación (DNI, Formulario 08, Formulario 09, Formulario 10)", required=False)
     formulario_10_firmado = forms.FileField(
         label="Formulario 10 firmado (habilitación de jugador libre/nuevo, si ya lo tenés)",
         required=False,
