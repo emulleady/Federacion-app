@@ -1,0 +1,68 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Programar fecha</h2>
+<p style="color:#6b7280; font-size:13px;">
+  Elegí una fecha (jornada) que ya tiene cruces cargados y todavía no tiene cancha/horario
+  asignado, indicá el fin de semana en que se juega, y el sistema le asigna cancha/día/horario
+  automáticamente a cada partido.
+</p>
+
+{% if jornadas %}
+<div class="card">
+  <h3>Fechas pendientes de programar</h3>
+  <table>
+    <tr><th>Torneo</th><th>Fecha (jornada)</th><th>Partidos sin programar</th></tr>
+    {% for j in jornadas %}
+    <tr>
+      <td>{{ j.torneo__nombre }}</td>
+      <td>{{ j.jornada }}</td>
+      <td>{{ j.cantidad }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px;">
+      <div>
+        <label>Fecha a programar</label>
+        <select name="jornada_combo" onchange="separarTorneoYJornada(this)" required>
+          <option value="">— Seleccionar —</option>
+          {% for j in jornadas %}
+          <option value="{{ j.torneo_id }}|{{ j.jornada }}">{{ j.torneo__nombre }} — {{ j.jornada }} ({{ j.cantidad }} partidos)</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="torneo" id="input-torneo">
+        <input type="hidden" name="jornada" id="input-jornada">
+      </div>
+      <div>
+        <label>Fin de semana desde</label>
+        <input type="date" name="fecha_desde" required>
+      </div>
+      <div>
+        <label>hasta</label>
+        <input type="date" name="fecha_hasta" required>
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button type="submit">Programar automáticamente</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  function separarTorneoYJornada(select) {
+    const [torneoId, jornada] = select.value.split('|');
+    document.getElementById('input-torneo').value = torneoId || '';
+    document.getElementById('input-jornada').value = jornada || '';
+  }
+</script>
+{% else %}
+<p style="color:#6b7280;">
+  No hay ninguna fecha pendiente de programar todavía. Cargá los cruces primero desde
+  <a href="{% url 'cargar_cruces' %}">Cargar cruces</a>.
+</p>
+{% endif %}
+{% endblock %}

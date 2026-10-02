@@ -7,6 +7,7 @@ from .models import (
     Tarjeta, SancionTarjeta, SancionDisciplinaria,
     Notificacion, DocumentoInstitucional, NotificacionAcuse, Gol, GolRecibido,
     ConceptoPunitorio, Punitorio, InformeArbitro, RespuestaInforme,
+    Cancha, DisponibilidadCancha, Partido,
 )
 
 
@@ -34,7 +35,8 @@ class ClubAdmin(admin.ModelAdmin):
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "edad_minima", "edad_maxima")
+    list_display = ("nombre", "edad_minima", "edad_maxima", "duracion_minutos")
+    list_editable = ("duracion_minutos",)
 
 
 class DocumentoPersonaInline(admin.TabularInline):
@@ -181,3 +183,23 @@ class InformeArbitroAdmin(admin.ModelAdmin):
     list_filter = ("torneo", "visto_por_federacion")
     search_fields = ("arbitro__username", "club_local__nombre", "club_visitante__nombre")
     inlines = [RespuestaInformeInline]
+
+
+class DisponibilidadCanchaInline(admin.TabularInline):
+    model = DisponibilidadCancha
+    extra = 0
+
+
+@admin.register(Cancha)
+class CanchaAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "activa")
+    list_filter = ("activa",)
+    search_fields = ("nombre",)
+    inlines = [DisponibilidadCanchaInline]
+
+
+@admin.register(Partido)
+class PartidoAdmin(admin.ModelAdmin):
+    list_display = ("club_local", "club_visitante", "categoria", "torneo", "jornada", "cancha", "fecha", "hora", "arbitro")
+    list_filter = ("torneo", "categoria", "jornada", "cancha")
+    search_fields = ("club_local__nombre", "club_visitante__nombre", "jornada")

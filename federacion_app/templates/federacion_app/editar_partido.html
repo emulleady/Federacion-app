@@ -1,0 +1,37 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Editar partido</h2>
+<p style="color:#6b7280;">{{ partido.categoria.nombre }} — {{ partido.club_local }} vs {{ partido.club_visitante }} ({{ partido.jornada }})</p>
+
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div>
+        <label>Cancha</label>
+        <select name="cancha">
+          <option value="">— Sin asignar —</option>
+          {% for c in canchas %}<option value="{{ c.id }}" {% if partido.cancha_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Árbitro (opcional)</label>
+        <select name="arbitro">
+          <option value="">— Sin asignar —</option>
+          {% for a in arbitros %}<option value="{{ a.id }}" {% if partido.arbitro_id == a.id %}selected{% endif %}>{{ a.username }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Fecha</label>
+        <input type="date" name="fecha" value="{{ partido.fecha|date:'Y-m-d' }}">
+      </div>
+      <div>
+        <label>Hora</label>
+        <input type="time" name="hora" value="{{ partido.hora|time:'H:i' }}">
+      </div>
+    </div>
+    <button type="submit" style="margin-top:14px;">Guardar</button>
+  </form>
+</div>
+<p><a href="{% url 'ver_fixture' %}?torneo={{ partido.torneo_id }}&jornada={{ partido.jornada }}">← Volver al fixture</a></p>
+{% endblock %}

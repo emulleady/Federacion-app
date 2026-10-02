@@ -323,6 +323,9 @@
             Pedidos de carnet
             {% if pedidos_carnet_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ pedidos_carnet_count }}</span>{% endif %}
           </a>
+          <a href="{% url 'canchas' %}">Canchas</a>
+          <a href="{% url 'cargar_cruces' %}">Cargar cruces</a>
+          <a href="{% url 'programar_fecha' %}">Programar fecha</a>
         {% endif %}
         {% if user.rol == "consejo_disciplina" %}
           <a href="{% url 'panel_disciplina' %}">Consejo de Disciplina</a>
@@ -337,6 +340,7 @@
             {% if respuestas_nuevas_arbitro_count %}<span class="badge badge-rechazado" style="margin-left:4px;">{{ respuestas_nuevas_arbitro_count }}</span>{% endif %}
           </a>
         {% endif %}
+        <a href="{% url 'ver_fixture' %}">Fixture</a>
         {% if user.rol != "consejo_disciplina" and user.rol != "arbitro" %}
           <a href="{% url 'buscar_persona' %}">Buscar jugador</a>
         {% endif %}

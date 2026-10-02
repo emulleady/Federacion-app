@@ -1,0 +1,88 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  <h2 style="margin:0;">Fixture</h2>
+  <div>
+    <a href="{% url 'fixture_excel' %}?torneo={{ torneo_id|default:'' }}&categoria={{ categoria_id|default:'' }}&club={{ club_id|default:'' }}&jornada={{ jornada|default:'' }}">↓ Excel</a>
+    &nbsp;&nbsp;
+    <a href="{% url 'fixture_pdf' %}?torneo={{ torneo_id|default:'' }}&categoria={{ categoria_id|default:'' }}&club={{ club_id|default:'' }}&jornada={{ jornada|default:'' }}">↓ PDF</a>
+    {% if puede_editar %}
+    &nbsp;&nbsp;
+    <form method="post" action="{% url 'eliminar_fixture_filtrado' %}?torneo={{ torneo_id|default:'' }}&categoria={{ categoria_id|default:'' }}&club={{ club_id|default:'' }}&jornada={{ jornada|default:'' }}" style="display:inline;" onsubmit="return confirm('¿Eliminar {% if torneo_id or categoria_id or club_id or jornada %}todos los partidos con el filtro actual{% else %}TODO el fixture, sin ningún filtro puesto{% endif %}? Esta acción no se puede deshacer.');">
+      {% csrf_token %}
+      <button type="submit" style="background:#dc2626; padding:6px 14px; font-size:13px;">🗑️ Eliminar {% if torneo_id or categoria_id or club_id or jornada %}filtrado{% else %}todo{% endif %}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px;">
+    <div>
+      <label>Torneo</label>
+      <select name="torneo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for t in torneos %}<option value="{{ t.id }}" {% if torneo_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Categoría</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for cat in categorias %}<option value="{{ cat.id }}" {% if categoria_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Club</label>
+      <select name="club" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for c in clubes %}<option value="{{ c.id }}" {% if club_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Jornada</label>
+      <input type="text" name="jornada" value="{{ jornada|default:'' }}" onchange="this.form.submit()" placeholder="Ej: Fecha 5">
+    </div>
+  </form>
+</div>
+
+{% if puede_editar %}
+<p><a href="{% url 'cargar_cruces' %}">+ Cargar cruces</a> · <a href="{% url 'programar_fecha' %}">Programar fecha</a></p>
+{% endif %}
+
+<table>
+  <tr>
+    <th>Categoría</th>
+    <th>Local</th>
+    <th>Visitante</th>
+    <th>Cancha</th>
+    <th>Fecha</th>
+    <th>Hora</th>
+    <th>Árbitro</th>
+    {% if puede_editar %}<th></th>{% endif %}
+  </tr>
+  {% for p in partidos %}
+  <tr>
+    <td>{{ p.categoria.nombre }}</td>
+    <td>{{ p.club_local.nombre }}</td>
+    <td>{{ p.club_visitante.nombre }}</td>
+    <td>{% if p.cancha %}{{ p.cancha.nombre }}{% else %}<span class="badge badge-rechazado">Sin asignar</span>{% endif %}</td>
+    <td>{{ p.fecha|date:"d/m/Y"|default:"—" }}</td>
+    <td>{{ p.hora|time:"H:i"|default:"—" }}</td>
+    <td>{{ p.arbitro.username|default:"—" }}</td>
+    {% if puede_editar %}
+    <td>
+      <a href="{% url 'editar_partido' p.id %}">Editar</a>
+      ·
+      <form method="post" action="{% url 'eliminar_partido' p.id %}" style="display:inline;" onsubmit="return confirm('¿Eliminar este partido del fixture?');">
+        {% csrf_token %}
+        <button type="submit" style="background:#dc2626; padding:2px 8px; font-size:12px;">Eliminar</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% empty %}
+  <tr><td colspan="8">No hay partidos para este filtro.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -91,4 +91,18 @@ urlpatterns = [
     # Pedidos de carnet
     path("carnets/pedidos/", views.pedidos_carnet, name="pedidos_carnet"),
     path("carnets/pedidos/<int:persona_id>/resolver/", views.resolver_pedido_carnet, name="resolver_pedido_carnet"),
+
+    # Fixture
+    path("canchas/", views.canchas, name="canchas"),
+    path("canchas/<int:cancha_id>/disponibilidad/agregar/", views.agregar_disponibilidad_cancha, name="agregar_disponibilidad_cancha"),
+    path("canchas/disponibilidad/<int:disponibilidad_id>/quitar/", views.quitar_disponibilidad_cancha, name="quitar_disponibilidad_cancha"),
+    path("canchas/<int:cancha_id>/alternar-activa/", views.alternar_activa_cancha, name="alternar_activa_cancha"),
+    path("fixture/cruces/", views.cargar_cruces, name="cargar_cruces"),
+    path("fixture/programar/", views.programar_fecha, name="programar_fecha"),
+    path("fixture/partido/<int:partido_id>/editar/", views.editar_partido, name="editar_partido"),
+    path("fixture/partido/<int:partido_id>/eliminar/", views.eliminar_partido, name="eliminar_partido"),
+    path("fixture/eliminar-filtrado/", views.eliminar_fixture_filtrado, name="eliminar_fixture_filtrado"),
+    path("fixture/", views.ver_fixture, name="ver_fixture"),
+    path("fixture/excel/", views.fixture_excel, name="fixture_excel"),
+    path("fixture/pdf/", views.fixture_pdf, name="fixture_pdf"),
 ]

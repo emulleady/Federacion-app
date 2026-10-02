@@ -1,9 +1,9 @@
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from django.db.models import Q
+from django.db.models import Q, F
 from django.core.mail import send_mail
 from django.conf import settings
 from .models import Persona, SolicitudPase, Vinculo, DocumentoSolicitud, Club, Categoria, DocumentoPersona
@@ -562,6 +562,23 @@ def importar_excel(request):
                     normalizadas.append(c)
                 return normalizadas
 
+            def generar_codigo_unico(nombre_club):
+                """
+                Arma un código de afiliación automático que NUNCA choca con
+                otro existente, aunque dos clubes tengan nombres parecidos
+                (ej: 'Real Madrid' y 'Real Madrid Azul'). Antes se usaban
+                solo los primeros 10 caracteres, lo que hacía que ambos
+                clubes generaran el mismo código y el segundo fallara en
+                silencio al chocar contra la restricción de unicidad.
+                """
+                base = "".join(c for c in nombre_club.upper() if c.isalnum())[:15]
+                candidato = f"AUTO-{base}"
+                sufijo = 2
+                while Club.objects.filter(codigo_afiliacion=candidato).exists():
+                    candidato = f"AUTO-{base[:12]}{sufijo}"
+                    sufijo += 1
+                return candidato
+
             def leer_hoja_con_encabezado_flexible(archivo, nombre_hoja):
                 """
                 Busca la fila real de encabezados dentro de las primeras 5 filas,
@@ -596,14 +613,20 @@ def importar_excel(request):
                         errores.append(f"Hoja '{nombre_hoja}': faltan columnas {faltantes}, se omite.")
                         continue
 
-                    club_de_la_hoja, _ = Club.objects.get_or_create(
-                        nombre__iexact=nombre_club,
-                        defaults={
-                            "nombre": nombre_club,
-                            "codigo_afiliacion": f"AUTO-{nombre_club[:10].upper()}",
-                            "fecha_afiliacion": date.today(),
-                        },
-                    )
+                    club_de_la_hoja = None  # se crea recién si alguna fila lo necesita (ver más abajo)
+
+                    def obtener_club_de_la_hoja():
+                        nonlocal club_de_la_hoja
+                        if club_de_la_hoja is None:
+                            club_de_la_hoja, _ = Club.objects.get_or_create(
+                                nombre__iexact=nombre_club,
+                                defaults={
+                                    "nombre": nombre_club,
+                                    "codigo_afiliacion": generar_codigo_unico(nombre_club),
+                                    "fecha_afiliacion": date.today(),
+                                },
+                            )
+                        return club_de_la_hoja
 
                     for i, fila in df.iterrows():
                         ubicacion = f"Hoja '{nombre_hoja}', fila {i + 2}"
@@ -622,12 +645,12 @@ def importar_excel(request):
                                     nombre__iexact=nombre_club_fila,
                                     defaults={
                                         "nombre": nombre_club_fila,
-                                        "codigo_afiliacion": f"AUTO-{nombre_club_fila[:10].upper()}",
+                                        "codigo_afiliacion": generar_codigo_unico(nombre_club_fila),
                                         "fecha_afiliacion": date.today(),
                                     },
                                 )
                             else:
-                                club = club_de_la_hoja
+                                club = obtener_club_de_la_hoja()
 
                             fecha_nac = parsear_fecha(fila["fecha_nacimiento"])
                             if not fecha_nac:
@@ -3067,3 +3090,618 @@ def resolver_pedido_carnet(request, persona_id):
         else:
             messages.error(request, "Ingresá el número de carnet.")
     return redirect("pedidos_carnet")
+
+
+# ---------------------------------------------------------------------
+# FIXTURE — canchas, disponibilidad y armado de partidos
+# ---------------------------------------------------------------------
+
+@login_required
+@user_passes_test(es_federacion)
+def canchas(request):
+    """La federación crea/edita canchas: nombre, categorías habilitadas y disponibilidad semanal."""
+    from .models import Cancha, Categoria
+
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    if request.method == "POST" and request.POST.get("accion") == "crear_cancha":
+        nombre = request.POST.get("nombre", "").strip()
+        if nombre:
+            cancha = Cancha.objects.create(
+                nombre=nombre, direccion=request.POST.get("direccion", "").strip(),
+            )
+            ids_categorias = request.POST.getlist("categorias_habilitadas")
+            if ids_categorias:
+                cancha.categorias_habilitadas.set(ids_categorias)
+            messages.success(request, f"Cancha «{nombre}» creada.")
+        else:
+            messages.error(request, "Ingresá un nombre para la cancha.")
+        return redirect("canchas")
+
+    lista_canchas = Cancha.objects.prefetch_related("disponibilidades", "categorias_habilitadas").all()
+    return render(request, "federacion_app/canchas.html", {
+        "canchas": lista_canchas, "categorias": categorias,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def agregar_disponibilidad_cancha(request, cancha_id):
+    """Agrega una franja horaria semanal (día + desde + hasta) a una cancha."""
+    from .models import Cancha, DisponibilidadCancha
+    cancha = get_object_or_404(Cancha, id=cancha_id)
+    if request.method == "POST":
+        try:
+            DisponibilidadCancha.objects.create(
+                cancha=cancha,
+                dia_semana=request.POST["dia_semana"],
+                hora_inicio=request.POST["hora_inicio"],
+                hora_fin=request.POST["hora_fin"],
+            )
+            messages.success(request, "Disponibilidad agregada.")
+        except Exception:
+            messages.error(request, "Completá día, hora desde y hora hasta correctamente.")
+    return redirect("canchas")
+
+
+@login_required
+@user_passes_test(es_federacion)
+def quitar_disponibilidad_cancha(request, disponibilidad_id):
+    from .models import DisponibilidadCancha
+    disp = get_object_or_404(DisponibilidadCancha, id=disponibilidad_id)
+    if request.method == "POST":
+        disp.delete()
+        messages.success(request, "Disponibilidad eliminada.")
+    return redirect("canchas")
+
+
+@login_required
+@user_passes_test(es_federacion)
+def alternar_activa_cancha(request, cancha_id):
+    from .models import Cancha
+    cancha = get_object_or_404(Cancha, id=cancha_id)
+    if request.method == "POST":
+        cancha.activa = not cancha.activa
+        cancha.save(update_fields=["activa"])
+    return redirect("canchas")
+
+
+def _categorias_ordenadas_por_edad():
+    """Categorías ordenadas de menor a mayor edad, para saber cuáles son 'vecinas' entre sí."""
+    from .models import Categoria
+    return list(Categoria.objects.order_by(F("edad_minima").asc(nulls_last=True)))
+
+
+def _categorias_vecinas(categoria_id, categorias_ordenadas):
+    """IDs de las categorías inmediatamente menor y mayor a la dada, según edad."""
+    posiciones = {c.id: i for i, c in enumerate(categorias_ordenadas)}
+    i = posiciones.get(categoria_id)
+    if i is None:
+        return set()
+    vecinas = set()
+    if i > 0:
+        vecinas.add(categorias_ordenadas[i - 1].id)
+    if i < len(categorias_ordenadas) - 1:
+        vecinas.add(categorias_ordenadas[i + 1].id)
+    return vecinas
+
+
+def _generar_slots_horarios(fecha_desde, fecha_hasta, duracion_minutos=60):
+    """
+    A partir de la disponibilidad semanal de cada cancha activa, arma
+    la lista de franjas concretas (cancha, fecha, hora) dentro del
+    rango de fechas dado, dividiendo cada bloque de disponibilidad en
+    turnos de `duracion_minutos`.
+    """
+    from .models import DisponibilidadCancha
+
+    disponibilidades = list(
+        DisponibilidadCancha.objects.select_related("cancha").filter(cancha__activa=True)
+    )
+    slots = []
+    dia_actual = fecha_desde
+    while dia_actual <= fecha_hasta:
+        dia_semana = dia_actual.weekday()  # 0=lunes ... 6=domingo
+        for disp in disponibilidades:
+            if disp.dia_semana != dia_semana:
+                continue
+            hora = disp.hora_inicio
+            while True:
+                fin_turno = (datetime.combine(dia_actual, hora) + timedelta(minutes=duracion_minutos)).time()
+                if fin_turno > disp.hora_fin:
+                    break
+                slots.append({"cancha": disp.cancha, "fecha": dia_actual, "hora": hora})
+                hora = fin_turno
+        dia_actual += timedelta(days=1)
+    return slots
+
+
+def _asignar_horarios_a_partidos(partidos, fecha_desde, fecha_hasta):
+    """
+    Asigna cancha/fecha/hora a partidos YA CARGADOS (sin cancha/fecha/hora
+    todavía), respetando:
+    - que la cancha esté disponible ese día y a esa hora,
+    - que la cancha tenga habilitada esa categoría,
+    - que ningún club juegue dos partidos a la misma hora,
+    - que dos categorías 'vecinas' (por edad) no jueguen en el mismo
+      día y horario en ninguna cancha,
+    - y que no choque con partidos que YA estaban programados antes
+      (de otras fechas), para no duplicar el uso de una cancha/horario.
+    Modifica los partidos recibidos en la base (los actualiza in-place).
+    Devuelve (asignados, sin_asignar).
+    """
+    from .models import Partido
+
+    categorias_ordenadas = _categorias_ordenadas_por_edad()
+
+    # La duración del partido varía según la categoría (una C7 puede durar
+    # menos que un HONOR), así que la grilla de turnos se calcula por
+    # separado para cada duración distinta que aparezca en esta tanda.
+    slots_por_duracion = {}
+
+    def slots_para_duracion(duracion_minutos):
+        if duracion_minutos not in slots_por_duracion:
+            slots_por_duracion[duracion_minutos] = _generar_slots_horarios(
+                fecha_desde, fecha_hasta, duracion_minutos=duracion_minutos
+            )
+        return slots_por_duracion[duracion_minutos]
+
+    ocupacion_cancha = set()             # (cancha_id, fecha, hora)
+    ocupacion_club = set()               # (club_id, fecha, hora)
+    ocupacion_categoria_horario = set()  # (fecha, hora, categoria_id)
+
+    # Partidos que ya estaban programados de antes (de otras fechas/jornadas)
+    # también ocupan cancha/club/horario, para no pisarlos.
+    ids_a_programar = {p.id for p in partidos}
+    for p in Partido.objects.filter(
+        fecha__isnull=False, hora__isnull=False, cancha__isnull=False
+    ).exclude(id__in=ids_a_programar):
+        ocupacion_cancha.add((p.cancha_id, p.fecha, p.hora))
+        ocupacion_club.add((p.club_local_id, p.fecha, p.hora))
+        ocupacion_club.add((p.club_visitante_id, p.fecha, p.hora))
+        ocupacion_categoria_horario.add((p.fecha, p.hora, p.categoria_id))
+
+    asignados = []
+    sin_asignar = []
+
+    for partido in partidos:
+        duracion = partido.categoria.duracion_minutos or 60
+        slots = slots_para_duracion(duracion)
+        vecinas = _categorias_vecinas(partido.categoria_id, categorias_ordenadas)
+        asignado = False
+
+        for slot in slots:
+            cancha, fecha, hora = slot["cancha"], slot["fecha"], slot["hora"]
+
+            if not cancha.habilita_categoria(partido.categoria):
+                continue
+            if (cancha.id, fecha, hora) in ocupacion_cancha:
+                continue
+            if (partido.club_local_id, fecha, hora) in ocupacion_club:
+                continue
+            if (partido.club_visitante_id, fecha, hora) in ocupacion_club:
+                continue
+            if any(
+                f == fecha and h == hora and cat_id in vecinas
+                for (f, h, cat_id) in ocupacion_categoria_horario
+            ):
+                continue
+
+            ocupacion_cancha.add((cancha.id, fecha, hora))
+            ocupacion_club.add((partido.club_local_id, fecha, hora))
+            ocupacion_club.add((partido.club_visitante_id, fecha, hora))
+            ocupacion_categoria_horario.add((fecha, hora, partido.categoria_id))
+
+            partido.cancha = cancha
+            partido.fecha = fecha
+            partido.hora = hora
+            partido.save()
+            asignados.append(partido)
+            asignado = True
+            break
+
+        if not asignado:
+            sin_asignar.append(partido)
+
+    return asignados, sin_asignar
+
+
+def _mensaje_sin_disponibilidad(fecha_desde, fecha_hasta):
+    """Arma el texto de diagnóstico cuando no hay ninguna franja horaria disponible en el rango dado."""
+    from .models import DisponibilidadCancha
+
+    dias_del_rango = []
+    dia_iter = fecha_desde
+    nombres_dia = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    while dia_iter <= fecha_hasta:
+        dias_del_rango.append(nombres_dia[dia_iter.weekday()])
+        dia_iter += timedelta(days=1)
+    dias_con_disponibilidad_cargada = sorted(set(
+        nombres_dia[d] for d in DisponibilidadCancha.objects.filter(
+            cancha__activa=True
+        ).values_list("dia_semana", flat=True)
+    ))
+    return (
+        f"No se pudo programar ningún partido: no hay ninguna cancha activa con disponibilidad "
+        f"cargada para los días de ese rango ({', '.join(dias_del_rango)}). "
+        f"Las canchas activas tienen disponibilidad cargada para: "
+        f"{', '.join(dias_con_disponibilidad_cargada) if dias_con_disponibilidad_cargada else 'ningún día todavía'}. "
+        f"Revisá «Canchas» y cargá disponibilidad para {' o '.join(set(dias_del_rango))}, "
+        f"o corregí el rango de fechas."
+    )
+
+
+@login_required
+@user_passes_test(es_federacion)
+def cargar_cruces(request):
+    """
+    La federación carga los cruces (local vs visitante) de TODAS las
+    fechas del torneo, de una sola vez para toda la temporada — a mano,
+    fila por fila, o subiendo un Excel con muchas filas juntas. Todavía
+    NO se les asigna cancha/día/horario acá (eso se hace después, fecha
+    por fecha, en 'Programar fecha'), así que no hace falta saber de
+    antemano canchas ni horarios para cargar los cruces del año entero.
+    """
+    from .models import Torneo, Categoria, Club, Partido
+
+    torneos = Torneo.objects.filter(activo=True)
+    categorias = Categoria.objects.all().order_by("nombre")
+
+    clubes_por_categoria = {}
+    for cat in categorias:
+        clubes_cat = Club.objects.filter(
+            vinculos__categoria=cat, vinculos__fecha_fin__isnull=True,
+            vinculos__tipo="jugador", activo=True,
+        ).distinct().order_by("nombre")
+        clubes_por_categoria[cat.id] = [{"id": c.id, "nombre": c.nombre} for c in clubes_cat]
+
+    if request.method == "POST":
+        torneo_id = request.POST.get("torneo")
+        if not torneo_id:
+            messages.error(request, "Elegí el torneo.")
+            return redirect("cargar_cruces")
+        torneo = get_object_or_404(Torneo, id=torneo_id)
+
+        archivo_excel = request.FILES.get("archivo_excel")
+        if archivo_excel:
+            import pandas as pd
+            creados = 0
+            errores_excel = []
+            try:
+                df = pd.read_excel(archivo_excel, dtype=str)
+                df.columns = [str(c).strip().lower() for c in df.columns]
+                columnas_necesarias = {"jornada", "categoria", "club_local", "club_visitante"}
+                faltantes = columnas_necesarias - set(df.columns)
+                if faltantes:
+                    messages.error(request, f"Al Excel le faltan las columnas: {', '.join(faltantes)}.")
+                    return redirect("cargar_cruces")
+
+                for i, fila in df.iterrows():
+                    try:
+                        jornada = str(fila["jornada"]).strip()
+                        categoria = Categoria.objects.filter(nombre__iexact=str(fila["categoria"]).strip()).first()
+                        club_local = Club.objects.filter(nombre__iexact=str(fila["club_local"]).strip()).first()
+                        club_visitante = Club.objects.filter(nombre__iexact=str(fila["club_visitante"]).strip()).first()
+                        if not jornada or not categoria or not club_local or not club_visitante:
+                            errores_excel.append(f"Fila {i + 2}: falta jornada, o no se encontró la categoría/club.")
+                            continue
+                        Partido.objects.create(
+                            torneo=torneo, categoria=categoria, jornada=jornada,
+                            club_local=club_local, club_visitante=club_visitante,
+                            creado_por=request.user,
+                        )
+                        creados += 1
+                    except Exception as e:
+                        errores_excel.append(f"Fila {i + 2}: {e}")
+            except Exception as e:
+                messages.error(request, f"No se pudo leer el Excel: {e}")
+                return redirect("cargar_cruces")
+
+            if errores_excel:
+                messages.error(
+                    request,
+                    f"Se cargaron {creados} cruces. {len(errores_excel)} filas con problemas: "
+                    + " | ".join(errores_excel[:10])
+                )
+            else:
+                messages.success(request, f"Se cargaron {creados} cruces desde el Excel.")
+            return redirect("cargar_cruces")
+
+        # --- Carga manual, fila por fila ---
+        creados = 0
+        indices = set()
+        for clave in request.POST:
+            if clave.startswith("partido_") and clave.endswith("_categoria"):
+                indices.add(clave.split("_")[1])
+
+        for i in indices:
+            jornada = request.POST.get(f"partido_{i}_jornada", "").strip()
+            categoria_id = request.POST.get(f"partido_{i}_categoria")
+            local_id = request.POST.get(f"partido_{i}_local")
+            visitante_id = request.POST.get(f"partido_{i}_visitante")
+            if jornada and categoria_id and local_id and visitante_id and local_id != visitante_id:
+                Partido.objects.create(
+                    torneo=torneo, categoria_id=categoria_id, jornada=jornada,
+                    club_local_id=local_id, club_visitante_id=visitante_id,
+                    creado_por=request.user,
+                )
+                creados += 1
+
+        if creados:
+            messages.success(request, f"Se cargaron {creados} cruces.")
+        else:
+            messages.error(request, "Cargá al menos un cruce completo (fecha, categoría, local y visitante).")
+        return redirect("cargar_cruces")
+
+    return render(request, "federacion_app/cargar_cruces.html", {
+        "torneos": torneos, "categorias": categorias, "clubes_por_categoria": clubes_por_categoria,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def programar_fecha(request):
+    """
+    La federación elige una fecha (jornada) que ya tiene cruces cargados
+    en 'Cargar cruces' pero todavía sin cancha/día/horario, define el fin
+    de semana en que se va a jugar, y el sistema le asigna automáticamente
+    cancha/día/horario a cada uno de esos partidos.
+    """
+    from .models import Partido, Torneo
+
+    pendientes_qs = (
+        Partido.objects.filter(cancha__isnull=True)
+        .values("torneo_id", "torneo__nombre", "jornada")
+        .distinct()
+        .order_by("torneo__nombre", "jornada")
+    )
+    jornadas_pendientes = []
+    for item in pendientes_qs:
+        cantidad = Partido.objects.filter(
+            torneo_id=item["torneo_id"], jornada=item["jornada"], cancha__isnull=True
+        ).count()
+        jornadas_pendientes.append({**item, "cantidad": cantidad})
+
+    if request.method == "POST":
+        torneo_id = request.POST.get("torneo")
+        jornada = request.POST.get("jornada", "").strip()
+        fecha_desde = request.POST.get("fecha_desde")
+        fecha_hasta = request.POST.get("fecha_hasta")
+
+        if not (torneo_id and jornada and fecha_desde and fecha_hasta):
+            messages.error(request, "Elegí la fecha (jornada) a programar y el rango de días del fin de semana.")
+            return redirect("programar_fecha")
+
+        torneo = get_object_or_404(Torneo, id=torneo_id)
+        fecha_desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+        fecha_hasta = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+
+        partidos_de_la_fecha = list(Partido.objects.filter(
+            torneo=torneo, jornada=jornada, cancha__isnull=True
+        ).select_related("categoria", "club_local", "club_visitante"))
+
+        if not partidos_de_la_fecha:
+            messages.error(request, "No hay cruces pendientes de programar para esa fecha (¿ya la programaste antes?).")
+            return redirect("programar_fecha")
+
+        slots_disponibles = _generar_slots_horarios(fecha_desde, fecha_hasta)
+        if not slots_disponibles:
+            messages.error(request, _mensaje_sin_disponibilidad(fecha_desde, fecha_hasta))
+            return redirect("programar_fecha")
+
+        asignados, sin_asignar = _asignar_horarios_a_partidos(partidos_de_la_fecha, fecha_desde, fecha_hasta)
+
+        if sin_asignar:
+            messages.error(
+                request,
+                f"Se programaron {len(asignados)} de {len(partidos_de_la_fecha)} partidos. "
+                f"{len(sin_asignar)} quedaron sin cancha/horario disponible — asignalos a mano desde el Fixture.",
+            )
+        else:
+            messages.success(request, f"Se programaron los {len(asignados)} partidos de «{jornada}».")
+
+        return redirect(f"/fixture/?torneo={torneo.id}&jornada={jornada}")
+
+    return render(request, "federacion_app/programar_fecha.html", {"jornadas": jornadas_pendientes})
+
+
+
+@login_required
+@user_passes_test(es_federacion)
+def editar_partido(request, partido_id):
+    """Ajustar a mano la cancha/fecha/hora/árbitro de un partido puntual."""
+    from .models import Partido, Cancha, Usuario
+
+    partido = get_object_or_404(Partido, id=partido_id)
+    if request.method == "POST":
+        partido.cancha_id = request.POST.get("cancha") or None
+        partido.fecha = request.POST.get("fecha") or None
+        partido.hora = request.POST.get("hora") or None
+        partido.arbitro_id = request.POST.get("arbitro") or None
+        partido.save()
+        messages.success(request, "Partido actualizado.")
+        return redirect(f"/fixture/?torneo={partido.torneo_id}&jornada={partido.jornada}")
+
+    canchas_disp = Cancha.objects.filter(activa=True).order_by("nombre")
+    arbitros = Usuario.objects.filter(rol="arbitro").order_by("username")
+    return render(request, "federacion_app/editar_partido.html", {
+        "partido": partido, "canchas": canchas_disp, "arbitros": arbitros,
+    })
+
+
+@login_required
+@user_passes_test(es_federacion)
+def eliminar_partido(request, partido_id):
+    from .models import Partido
+    partido = get_object_or_404(Partido, id=partido_id)
+    if request.method == "POST":
+        torneo_id, jornada = partido.torneo_id, partido.jornada
+        partido.delete()
+        messages.success(request, "Partido eliminado del fixture.")
+        return redirect(f"/fixture/?torneo={torneo_id}&jornada={jornada}")
+    return redirect("ver_fixture")
+
+
+@login_required
+@user_passes_test(es_federacion)
+def eliminar_fixture_filtrado(request):
+    """
+    Elimina TODOS los partidos que coinciden con el filtro actual de la
+    pantalla de Fixture (torneo/categoría/club/jornada) — si no hay
+    ningún filtro puesto, borra el fixture completo entero.
+    """
+    if request.method == "POST":
+        _, _, _, _, partidos = _filtrar_fixture(request)
+        cantidad = partidos.count()
+        partidos.delete()
+        if cantidad:
+            messages.success(request, f"Se eliminaron {cantidad} partidos del fixture.")
+        else:
+            messages.error(request, "No había ningún partido para eliminar con ese filtro.")
+    return redirect("ver_fixture")
+
+
+def _filtrar_fixture(request):
+    """Aplica los filtros de torneo/categoría/club/jornada de la pantalla de Fixture. Reutilizado por la vista y las exportaciones."""
+    from .models import Partido
+
+    partidos = Partido.objects.select_related(
+        "torneo", "categoria", "club_local", "club_visitante", "cancha", "arbitro"
+    ).all()
+
+    torneo_id = request.GET.get("torneo")
+    categoria_id = request.GET.get("categoria")
+    club_id = request.GET.get("club")
+    jornada = request.GET.get("jornada")
+
+    if torneo_id:
+        partidos = partidos.filter(torneo_id=torneo_id)
+    if categoria_id:
+        partidos = partidos.filter(categoria_id=categoria_id)
+    if club_id:
+        partidos = partidos.filter(Q(club_local_id=club_id) | Q(club_visitante_id=club_id))
+    if jornada:
+        partidos = partidos.filter(jornada=jornada)
+
+    return torneo_id, categoria_id, club_id, jornada, partidos
+
+
+@login_required
+def ver_fixture(request):
+    """Cualquier usuario logueado (delegado, árbitro, federación) puede ver el fixture programado."""
+    from .models import Torneo, Categoria, Club
+
+    torneo_id, categoria_id, club_id, jornada, partidos = _filtrar_fixture(request)
+
+    return render(request, "federacion_app/ver_fixture.html", {
+        "partidos": partidos,
+        "torneos": Torneo.objects.filter(activo=True),
+        "categorias": Categoria.objects.all().order_by("nombre"),
+        "clubes": Club.objects.filter(activo=True).order_by("nombre"),
+        "torneo_id": torneo_id, "categoria_id": categoria_id, "club_id": club_id, "jornada": jornada,
+        "puede_editar": request.user.rol == "federacion",
+    })
+
+
+@login_required
+def fixture_excel(request):
+    """Descarga el fixture (con los mismos filtros aplicados en pantalla) como Excel."""
+    import openpyxl
+    from openpyxl.styles import Font
+    from django.http import HttpResponse
+
+    torneo_id, categoria_id, club_id, jornada, partidos = _filtrar_fixture(request)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fixture"
+
+    titulo = "Fixture"
+    if jornada:
+        titulo += f" — {jornada}"
+    ws.append([titulo])
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append([])
+
+    ws.append(["Categoría", "Local", "Visitante", "Cancha", "Fecha", "Hora", "Árbitro"])
+    for celda in ws[3]:
+        celda.font = Font(bold=True)
+
+    for p in partidos:
+        ws.append([
+            p.categoria.nombre,
+            p.club_local.nombre,
+            p.club_visitante.nombre,
+            p.cancha.nombre if p.cancha else "Sin asignar",
+            p.fecha.strftime("%d/%m/%Y") if p.fecha else "",
+            p.hora.strftime("%H:%M") if p.hora else "",
+            p.arbitro.username if p.arbitro else "",
+        ])
+
+    for col in ws.columns:
+        largo = max(len(str(c.value)) if c.value else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = largo + 4
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    nombre_archivo = f"fixture_{jornada or 'general'}.xlsx".replace(" ", "_")
+    response["Content-Disposition"] = f'attachment; filename="{nombre_archivo}"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def fixture_pdf(request):
+    """Descarga el fixture (con los mismos filtros aplicados en pantalla) como PDF."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from django.http import HttpResponse
+    import io
+
+    torneo_id, categoria_id, club_id, jornada, partidos = _filtrar_fixture(request)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
+    estilos = getSampleStyleSheet()
+    elementos = []
+
+    titulo = "Fixture"
+    if jornada:
+        titulo += f" — {jornada}"
+    elementos.append(Paragraph(titulo, estilos["Title"]))
+    elementos.append(Spacer(1, 12))
+
+    datos = [["Categoría", "Local", "Visitante", "Cancha", "Fecha", "Hora", "Árbitro"]]
+    for p in partidos:
+        datos.append([
+            p.categoria.nombre,
+            p.club_local.nombre,
+            p.club_visitante.nombre,
+            p.cancha.nombre if p.cancha else "Sin asignar",
+            p.fecha.strftime("%d/%m/%Y") if p.fecha else "—",
+            p.hora.strftime("%H:%M") if p.hora else "—",
+            p.arbitro.username if p.arbitro else "—",
+        ])
+
+    tabla = Table(datos, repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f2a4a")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fb")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elementos.append(tabla)
+
+    doc.build(elementos)
+    buffer.seek(0)
+
+    response = HttpResponse(buffer, content_type="application/pdf")
+    nombre_archivo = f"fixture_{jornada or 'general'}.pdf".replace(" ", "_")
+    response["Content-Disposition"] = f'attachment; filename="{nombre_archivo}"'
+    return response
+

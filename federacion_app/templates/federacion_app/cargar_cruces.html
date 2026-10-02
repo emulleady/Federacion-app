@@ -1,0 +1,106 @@
+{% extends "federacion_app/base.html" %}
+{% block content %}
+<h2>Cargar cruces de la temporada</h2>
+<p style="color:#6b7280; font-size:13px;">
+  Cargá acá los cruces (local vs visitante) de todas las fechas del año, para todas las
+  categorías — no hace falta indicar cancha ni horario todavía. Una vez que se acerque
+  el fin de semana en que se juega una fecha puntual, andá a <a href="{% url 'programar_fecha' %}">Programar fecha</a>
+  para que el sistema le asigne cancha/día/horario automáticamente.
+</p>
+
+<div class="card">
+  <h3>Subir por Excel (recomendado para cargar el año completo de una)</h3>
+  <p style="color:#6b7280; font-size:13px;">
+    Columnas necesarias: <strong>jornada, categoria, club_local, club_visitante</strong>
+    (los nombres de categoría y club tienen que coincidir con los que ya tenés cargados en el sistema).
+  </p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+      <div>
+        <label>Torneo</label>
+        <select name="torneo" required>
+          <option value="">— Seleccionar —</option>
+          {% for t in torneos %}<option value="{{ t.id }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Archivo Excel</label>
+        <input type="file" name="archivo_excel" accept=".xlsx,.xls" required>
+      </div>
+      <button type="submit">Subir cruces</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Cargar a mano</h3>
+  <form method="post" id="form-cruces-manual">
+    {% csrf_token %}
+    <div style="margin-bottom:14px;">
+      <label>Torneo</label>
+      <select name="torneo" required>
+        <option value="">— Seleccionar —</option>
+        {% for t in torneos %}<option value="{{ t.id }}">{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div id="filas-cruces"></div>
+    <button type="button" onclick="agregarFila()" style="background:var(--navy);">+ Agregar cruce</button>
+    <br><br>
+    <button type="submit">Cargar cruces</button>
+  </form>
+</div>
+
+{{ clubes_por_categoria|json_script:"clubes-por-categoria" }}
+
+<script>
+  const CLUBES_POR_CATEGORIA = JSON.parse(document.getElementById('clubes-por-categoria').textContent);
+  const CATEGORIAS = [
+    {% for cat in categorias %}{ id: "{{ cat.id }}", nombre: "{{ cat.nombre }}" },{% endfor %}
+  ];
+  let contadorFilas = 0;
+
+  function agregarFila() {
+    const i = contadorFilas++;
+    const contenedor = document.getElementById('filas-cruces');
+    const fila = document.createElement('div');
+    fila.style.cssText = "display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:10px; margin-bottom:10px; align-items:end;";
+    fila.innerHTML = `
+      <div>
+        <label>Fecha (jornada)</label>
+        <input type="text" name="partido_${i}_jornada" placeholder="Ej: Fecha 1" required>
+      </div>
+      <div>
+        <label>Categoría</label>
+        <select name="partido_${i}_categoria" onchange="actualizarClubes(this)" required>
+          <option value="">— Elegir —</option>
+          ${CATEGORIAS.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Local</label>
+        <select name="partido_${i}_local" required><option value="">— Elegí categoría primero —</option></select>
+      </div>
+      <div>
+        <label>Visitante</label>
+        <select name="partido_${i}_visitante" required><option value="">— Elegí categoría primero —</option></select>
+      </div>
+      <button type="button" onclick="this.parentElement.remove()" style="background:#dc2626; padding:8px 12px; height:38px;">Quitar</button>
+    `;
+    contenedor.appendChild(fila);
+  }
+
+  function actualizarClubes(selectCategoria) {
+    const fila = selectCategoria.closest('div[style*="grid"]');
+    const selectLocal = fila.querySelector('select[name$="_local"]');
+    const selectVisitante = fila.querySelector('select[name$="_visitante"]');
+    const clubes = CLUBES_POR_CATEGORIA[selectCategoria.value] || [];
+    const opciones = '<option value="">— Elegir —</option>' + clubes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    selectLocal.innerHTML = opciones;
+    selectVisitante.innerHTML = opciones;
+  }
+
+  agregarFila();
+</script>
+{% endblock %}

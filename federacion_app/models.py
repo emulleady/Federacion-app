@@ -77,6 +77,10 @@ class Categoria(models.Model):
     nombre = models.CharField(max_length=50, unique=True)
     edad_minima = models.PositiveSmallIntegerField(null=True, blank=True)
     edad_maxima = models.PositiveSmallIntegerField(null=True, blank=True)
+    duracion_minutos = models.PositiveSmallIntegerField(
+        default=60,
+        help_text="Duración de cada partido de esta categoría, en minutos. Se usa para calcular los turnos disponibles al programar el fixture.",
+    )
 
     def __str__(self):
         return self.nombre
@@ -794,3 +798,88 @@ class RespuestaInforme(models.Model):
 
     def __str__(self):
         return f"Respuesta a {self.informe}"
+
+
+# ---------------------------------------------------------------------
+# FIXTURE (canchas, disponibilidad y partidos programados)
+# ---------------------------------------------------------------------
+
+class Cancha(models.Model):
+    """Una cancha donde se pueden programar partidos."""
+    nombre = models.CharField(max_length=150)
+    direccion = models.CharField(max_length=255, blank=True)
+    activa = models.BooleanField(default=True)
+    categorias_habilitadas = models.ManyToManyField(
+        Categoria, blank=True, related_name="canchas_habilitadas",
+        help_text="Categorías que pueden jugar en esta cancha. Dejar vacío = todas las categorías.",
+    )
+
+    class Meta:
+        ordering = ["nombre"]
+        verbose_name_plural = "Canchas"
+
+    def __str__(self):
+        return self.nombre
+
+    def habilita_categoria(self, categoria):
+        return not self.categorias_habilitadas.exists() or self.categorias_habilitadas.filter(id=categoria.id).exists()
+
+
+class DisponibilidadCancha(models.Model):
+    """
+    Franja horaria semanal recurrente en la que una cancha está libre
+    para programar partidos (ej: todos los sábados de 14 a 20hs).
+    """
+    DIA_CHOICES = [
+        (0, "Lunes"), (1, "Martes"), (2, "Miércoles"), (3, "Jueves"),
+        (4, "Viernes"), (5, "Sábado"), (6, "Domingo"),
+    ]
+    cancha = models.ForeignKey(Cancha, on_delete=models.CASCADE, related_name="disponibilidades")
+    dia_semana = models.PositiveSmallIntegerField(choices=DIA_CHOICES)
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+
+    class Meta:
+        ordering = ["dia_semana", "hora_inicio"]
+        verbose_name_plural = "Disponibilidades de cancha"
+
+    def __str__(self):
+        return f"{self.cancha} — {self.get_dia_semana_display()} {self.hora_inicio.strftime('%H:%M')} a {self.hora_fin.strftime('%H:%M')}"
+
+
+class Partido(models.Model):
+    """
+    Un cruce del fixture. Local/visitante/categoría los carga la
+    federación a mano; cancha/fecha/hora se pueden asignar en forma
+    automática (respetando disponibilidad de cancha, categorías
+    habilitadas por cancha, y que no se pisen categorías vecinas en
+    el mismo día y horario) o ajustar a mano después.
+    """
+    torneo = models.ForeignKey(Torneo, on_delete=models.PROTECT, related_name="partidos")
+    categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, related_name="partidos")
+    jornada = models.CharField(max_length=50, help_text="Ej: Fecha 5, Cuartos de final")
+
+    club_local = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="partidos_local")
+    club_visitante = models.ForeignKey(Club, on_delete=models.PROTECT, related_name="partidos_visitante")
+
+    cancha = models.ForeignKey(Cancha, on_delete=models.SET_NULL, null=True, blank=True, related_name="partidos")
+    fecha = models.DateField(null=True, blank=True)
+    hora = models.TimeField(null=True, blank=True)
+
+    arbitro = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="partidos_arbitrados",
+        limit_choices_to={"rol": "arbitro"},
+    )
+
+    creado_por = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="partidos_creados")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["fecha", "hora"]
+
+    def __str__(self):
+        return f"{self.club_local} vs {self.club_visitante} — {self.categoria} ({self.jornada})"
+
+    @property
+    def sin_asignar(self):
+        return not (self.cancha and self.fecha and self.hora)
